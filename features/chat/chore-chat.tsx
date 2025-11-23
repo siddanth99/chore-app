@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import Button from '@/components/ui/Button'
 
 interface ChoreChatProps {
   choreId: string
@@ -57,10 +58,10 @@ export default function ChoreChat({ choreId, currentUserId }: ChoreChatProps) {
     return () => clearInterval(interval)
   }, [choreId])
 
-  // Auto-scroll to bottom when messages change
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages])
+  // Auto-scroll disabled to prevent page jumping
+  // useEffect(() => {
+  //   messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  // }, [messages])
 
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -100,71 +101,84 @@ export default function ChoreChat({ choreId, currentUserId }: ChoreChatProps) {
     }
   }
 
+  // Auto-scroll to bottom when new messages arrive
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages])
+
   return (
-    <div className="flex flex-col h-96 border border-gray-200 rounded-lg bg-white">
+    <div className="flex flex-col h-80 sm:h-96 border border-gray-200 dark:border-slate-700 rounded-lg bg-gray-50 dark:bg-slate-900 overflow-hidden">
       {/* Messages area */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50 dark:bg-slate-900">
         {messages.length === 0 ? (
-          <div className="text-center text-gray-500 py-8">
-            <p>No messages yet. Start the conversation!</p>
+          <div className="text-center text-gray-500 dark:text-slate-400 py-8">
+            <p className="text-sm">No messages yet. Say hello to get started.</p>
           </div>
         ) : (
           <>
-            {messages.map((msg) => (
-              <div
-                key={msg.id}
-                className={`flex ${
-                  msg.fromUserId === currentUserId ? 'justify-end' : 'justify-start'
-                }`}
-              >
+            {messages.map((msg) => {
+              const isCurrentUser = msg.fromUserId === currentUserId
+              return (
                 <div
-                  className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
-                    msg.fromUserId === currentUserId
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-200 text-gray-900'
+                  key={msg.id}
+                  className={`flex ${
+                    isCurrentUser ? 'justify-end' : 'justify-start'
                   }`}
                 >
-                  {msg.fromUserId !== currentUserId && (
-                    <p className="text-xs font-medium mb-1 opacity-75">
-                      {msg.fromUser.name}
-                    </p>
-                  )}
-                  <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
-                  <p
-                    className={`text-xs mt-1 ${
-                      msg.fromUserId === currentUserId
-                        ? 'text-blue-100'
-                        : 'text-gray-500'
+                  <div
+                    className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg shadow-sm ${
+                      isCurrentUser
+                        ? 'bg-blue-600 text-white rounded-br-none dark:bg-blue-500'
+                        : 'bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-200 border border-gray-200 dark:border-slate-700 rounded-bl-none'
                     }`}
                   >
-                    {new Date(msg.createdAt).toLocaleTimeString()}
-                  </p>
+                    {!isCurrentUser && (
+                      <p className="text-xs font-medium mb-1 text-gray-600 dark:text-slate-400">
+                        {msg.fromUser.name}
+                      </p>
+                    )}
+                    <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                    <p
+                      className={`text-xs mt-1 ${
+                        isCurrentUser
+                          ? 'text-blue-100'
+                          : 'text-gray-500 dark:text-slate-400'
+                      }`}
+                    >
+                      {new Date(msg.createdAt).toLocaleTimeString([], {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
+                    </p>
+                  </div>
                 </div>
-              </div>
-            ))}
+              )
+            })}
             <div ref={messagesEndRef} />
           </>
         )}
       </div>
 
       {/* Message input */}
-      <form onSubmit={handleSend} className="border-t border-gray-200 p-4">
+      <form onSubmit={handleSend} className="border-t border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-3">
         <div className="flex gap-2">
           <textarea
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             placeholder="Type your message..."
             rows={2}
-            className="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500"
+            className="flex-1 rounded-md border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-3 py-2 text-gray-900 dark:text-slate-200 placeholder-gray-400 dark:placeholder-slate-500 text-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 resize-none"
             disabled={sending}
           />
-          <button
+          <Button
             type="submit"
             disabled={sending || !message.trim()}
-            className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            variant="primary"
+            size="sm"
+            className="self-end"
           >
             {sending ? 'Sending...' : 'Send'}
-          </button>
+          </Button>
         </div>
       </form>
     </div>

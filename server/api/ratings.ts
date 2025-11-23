@@ -1,15 +1,16 @@
 import { prisma } from '../db/client'
+import { ChoreStatus } from '@prisma/client'
 
 export interface AddRatingInput {
   choreId: string
-  raterId: string
-  rateeId: string
+  fromUserId: string
   score: number
   comment?: string
 }
 
 /**
- * Add a rating for a completed chore
+ * Add or update a rating for a completed chore
+ * Only the customer (chore creator) can rate the assigned worker
  */
 export async function addRating(input: AddRatingInput) {
   // Validate score
@@ -17,55 +18,53 @@ export async function addRating(input: AddRatingInput) {
     throw new Error('Rating score must be between 1 and 5')
   }
 
-  // Verify the chore exists and is completed
+  // Load chore to validate and find the worker to rate
   const chore = await prisma.chore.findUnique({
     where: { id: input.choreId },
+    select: {
+      createdById: true,
+      assignedWorkerId: true,
+      status: true,
+    },
   })
 
   if (!chore) {
     throw new Error('Chore not found')
   }
 
-  if (chore.status !== 'COMPLETED') {
-    throw new Error('Can only rate completed chores')
+  if (chore.status !== ChoreStatus.COMPLETED) {
+    throw new Error('Ratings can only be submitted for completed chores')
   }
 
-  // Verify the rater is either the customer or the assigned worker
-  const isCustomer = chore.createdById === input.raterId
-  const isWorker = chore.assignedWorkerId === input.raterId
-
-  if (!isCustomer && !isWorker) {
-    throw new Error('Only the customer or assigned worker can rate')
+  // Only the customer (createdBy) may rate the worker
+  if (input.fromUserId !== chore.createdById) {
+    throw new Error('Only the customer who created this chore can rate it')
   }
 
-  // Verify the ratee is the other party
-  const expectedRateeId = isCustomer ? chore.assignedWorkerId : chore.createdById
-  if (input.rateeId !== expectedRateeId) {
-    throw new Error('Invalid rating target')
+  if (!chore.assignedWorkerId) {
+    throw new Error('No assigned worker to rate')
   }
 
-  // Check if rating already exists
-  const existingRating = await prisma.rating.findUnique({
+  const toUserId = chore.assignedWorkerId
+
+  // Use upsert to allow updating existing ratings
+  const rating = await prisma.rating.upsert({
     where: {
       choreId_fromUserId: {
         choreId: input.choreId,
-        fromUserId: input.raterId,
+        fromUserId: input.fromUserId,
       },
     },
-  })
-
-  if (existingRating) {
-    throw new Error('You have already rated this chore')
-  }
-
-  // Create the rating
-  const rating = await prisma.rating.create({
-    data: {
-      choreId: input.choreId,
-      fromUserId: input.raterId,
-      toUserId: input.rateeId,
+    update: {
       score: input.score,
-      comment: input.comment || null,
+      comment: input.comment ?? null,
+    },
+    create: {
+      choreId: input.choreId,
+      fromUserId: input.fromUserId,
+      toUserId,
+      score: input.score,
+      comment: input.comment ?? null,
     },
     include: {
       fromUser: {
@@ -93,7 +92,7 @@ export async function addRating(input: AddRatingInput) {
 }
 
 /**
- * Get all ratings for a specific user
+ * Get all ratings for a specific user (ratings received by them)
  */
 export async function getRatingsForUser(userId: string) {
   const ratings = await prisma.rating.findMany({
@@ -140,3 +139,72 @@ export async function getAverageRating(userId: string) {
   }
 }
 
+/**
+ * Get rating for a specific chore by a specific user
+ */
+export async function getRatingForChoreAndUser(choreId: string, userId: string) {
+  const rating = await prisma.rating.findUnique({
+    where: {
+      choreId_fromUserId: {
+        choreId,
+        fromUserId: userId,
+      },
+    },
+    include: {
+      fromUser: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+      toUser: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+      chore: {
+        select: {
+          id: true,
+          title: true,
+        },
+      },
+    },
+  })
+
+  return rating
+}
+
+/**
+ * Get rating for a specific chore (any rating for this chore)
+ */
+export async function getRatingForChore(choreId: string) {
+  const rating = await prisma.rating.findFirst({
+    where: { choreId },
+    include: {
+      fromUser: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+      toUser: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+      chore: {
+        select: {
+          id: true,
+          title: true,
+        },
+      },
+    },
+    orderBy: {
+      createdAt: 'desc',
+    },
+  })
+
+  return rating
+}

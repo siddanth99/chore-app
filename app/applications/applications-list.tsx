@@ -2,6 +2,9 @@
 
 import Link from 'next/link'
 import { ApplicationStatus } from '@prisma/client'
+import Card from '@/components/ui/Card'
+import Badge from '@/components/ui/Badge'
+import Button from '@/components/ui/Button'
 
 interface ApplicationsListProps {
   applications: any[]
@@ -22,111 +25,113 @@ export default function ApplicationsList({ applications }: ApplicationsListProps
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-gray-50 dark:bg-slate-950 py-12 px-4 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-4xl">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">My Applications</h1>
-          <p className="mt-2 text-sm text-gray-600">
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-slate-50">My Applications</h1>
+          <p className="mt-2 text-sm text-gray-600 dark:text-slate-400">
             View all the chores you've applied for
           </p>
         </div>
 
         {applications.length === 0 ? (
-          <div className="rounded-lg bg-white shadow p-12 text-center">
-            <p className="text-gray-500 mb-4">You haven't applied for any chores yet.</p>
-            <Link
-              href="/chores"
-              className="inline-block rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-500"
-            >
-              Browse Chores
-            </Link>
-          </div>
+          <Card className="text-center">
+            <div className="py-12">
+              <div className="text-5xl mb-4">📝</div>
+              <p className="text-gray-500 dark:text-slate-400 mb-4">You haven't applied for any chores yet.</p>
+              <Link href="/chores">
+                <Button variant="primary">Browse Chores</Button>
+              </Link>
+            </div>
+          </Card>
         ) : (
           <div className="space-y-4">
             {applications.map((app) => (
-              <div
+              <Card
                 key={app.id}
-                className="rounded-lg bg-white shadow hover:shadow-md transition-shadow"
+                className="transition-shadow transition-transform hover:shadow-md hover:-translate-y-0.5"
               >
-                <div className="p-6">
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="flex-1">
-                      <Link
-                        href={`/chores/${app.chore.id}`}
-                        className="text-xl font-semibold text-gray-900 hover:text-blue-600"
-                      >
-                        {app.chore.title}
-                      </Link>
-                      <p className="mt-1 text-sm text-gray-600 line-clamp-2">
-                        {app.chore.description}
-                      </p>
-                    </div>
-                    <span
-                      className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-medium ${getStatusColor(
-                        app.status
-                      )}`}
+                <div className="flex items-start justify-between mb-4">
+                  <div className="flex-1">
+                    <Link
+                      href={`/chores/${app.chore.id}`}
+                      className="text-xl font-semibold text-gray-900 dark:text-slate-50 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
                     >
-                      {app.status}
+                      {app.chore.title}
+                    </Link>
+                    <p className="mt-1 text-sm text-gray-600 dark:text-slate-300 line-clamp-2">
+                      {app.chore.description}
+                    </p>
+                  </div>
+                  <Badge
+                    variant={
+                      app.status === 'ACCEPTED'
+                        ? 'statusCompleted'
+                        : app.status === 'REJECTED'
+                        ? 'statusCancelled'
+                        : 'statusPublished'
+                    }
+                  >
+                    {app.status}
+                  </Badge>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4 mb-4 text-sm">
+                  <div>
+                    <span className="text-gray-500 dark:text-slate-400">Posted by:</span>
+                    <span className="ml-2 text-gray-900 dark:text-slate-50">{app.chore.createdBy.name}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-500 dark:text-slate-400">Type:</span>
+                    <span className="ml-2 text-gray-900 dark:text-slate-50">{app.chore.type}</span>
+                  </div>
+                  {app.chore.budget && (
+                    <div>
+                      <span className="text-gray-500 dark:text-slate-400">Budget:</span>
+                      <span className="ml-2 text-gray-900 dark:text-slate-50">${app.chore.budget}</span>
+                    </div>
+                  )}
+                  <div>
+                    <span className="text-gray-500 dark:text-slate-400">Applied:</span>
+                    <span className="ml-2 text-gray-900 dark:text-slate-50">
+                      {new Date(app.createdAt).toLocaleDateString()}
                     </span>
                   </div>
-
-                  <div className="grid grid-cols-2 gap-4 mb-4 text-sm">
-                    <div>
-                      <span className="text-gray-500">Posted by:</span>
-                      <span className="ml-2 text-gray-900">{app.chore.createdBy.name}</span>
-                    </div>
-                    <div>
-                      <span className="text-gray-500">Type:</span>
-                      <span className="ml-2 text-gray-900">{app.chore.type}</span>
-                    </div>
-                    {app.chore.budget && (
-                      <div>
-                        <span className="text-gray-500">Budget:</span>
-                        <span className="ml-2 text-gray-900">${app.chore.budget}</span>
-                      </div>
-                    )}
-                    <div>
-                      <span className="text-gray-500">Applied:</span>
-                      <span className="ml-2 text-gray-900">
-                        {new Date(app.createdAt).toLocaleDateString()}
-                      </span>
-                    </div>
-                  </div>
+                </div>
 
                   {app.bidAmount && (
                     <div className="mb-2">
-                      <span className="text-sm font-medium text-gray-700">Your Bid:</span>
-                      <span className="ml-2 text-sm text-gray-900">${app.bidAmount}</span>
+                      <span className="text-sm font-medium text-gray-700 dark:text-slate-300">Your Bid:</span>
+                      <span className="ml-2 text-sm text-gray-900 dark:text-slate-50">${app.bidAmount}</span>
                     </div>
                   )}
 
                   {app.message && (
                     <div className="mb-4">
-                      <p className="text-sm text-gray-600">{app.message}</p>
+                      <p className="text-sm text-gray-600 dark:text-slate-300">{app.message}</p>
                     </div>
                   )}
 
-                  <div className="flex items-center justify-between pt-4 border-t border-gray-200">
+                  <div className="flex items-center justify-between pt-4 border-t border-gray-200 dark:border-slate-700">
                     <span
                       className={`text-sm font-medium ${
                         app.chore.status === 'ASSIGNED' || app.chore.status === 'IN_PROGRESS'
-                          ? 'text-blue-600'
+                          ? 'text-blue-600 dark:text-blue-400'
                           : app.chore.status === 'COMPLETED'
-                          ? 'text-green-600'
-                          : 'text-gray-600'
+                          ? 'text-green-600 dark:text-green-400'
+                          : 'text-gray-600 dark:text-slate-400'
                       }`}
                     >
                       Chore Status: {app.chore.status.replace('_', ' ')}
                     </span>
                     <Link
                       href={`/chores/${app.chore.id}`}
-                      className="text-sm font-medium text-blue-600 hover:text-blue-500"
+                      className="text-sm font-medium text-blue-600 hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300 transition-colors"
                     >
                       View Details →
                     </Link>
                   </div>
-                </div>
-              </div>
+                </Card>
             ))}
           </div>
         )}

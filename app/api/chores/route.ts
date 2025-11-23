@@ -1,42 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { listPublishedChores } from '@/server/api/chores'
-import { getCurrentUser } from '@/server/auth/role'
+import { UserRole } from '@prisma/client'
+import { requireRole } from '@/server/auth/role'
+import { createChore } from '@/server/api/chores'
 
-/**
- * GET /api/chores - List all published chores (public endpoint)
- */
-export async function GET(request: NextRequest) {
-  try {
-    const chores = await listPublishedChores()
-    return NextResponse.json({ chores })
-  } catch (error) {
-    console.error('Error listing chores:', error)
-    return NextResponse.json(
-      { error: 'Failed to fetch chores' },
-      { status: 500 }
-    )
-  }
-}
-
-/**
- * POST /api/chores - Create a new chore (CUSTOMER only)
- */
+// POST /api/chores -> create a new chore (CUSTOMER only)
 export async function POST(request: NextRequest) {
   try {
-    const user = await getCurrentUser()
-    if (!user) {
-      return NextResponse.json(
-        { error: 'Authentication required' },
-        { status: 401 }
-      )
-    }
-
-    if (user.role !== 'CUSTOMER') {
-      return NextResponse.json(
-        { error: 'Only customers can create chores' },
-        { status: 403 }
-      )
-    }
+    // Only customers can create chores
+    const user = await requireRole(UserRole.CUSTOMER)
 
     const body = await request.json()
     const {
@@ -49,42 +20,48 @@ export async function POST(request: NextRequest) {
       locationLat,
       locationLng,
       dueAt,
+      imageUrl: rawImageUrl,
     } = body
 
-    // Validate required fields
+    // Normalize imageUrl to string or null, never undefined
+    // Also convert empty strings to null
+    const imageUrl = rawImageUrl && typeof rawImageUrl === 'string' && rawImageUrl.trim() 
+      ? rawImageUrl.trim() 
+      : null
+
     if (!title || !description || !type || !category) {
       return NextResponse.json(
-        { error: 'Title, description, type, and category are required' },
+        { error: 'Missing required fields: title, description, type, category' },
         { status: 400 }
       )
     }
 
-    if (type !== 'ONLINE' && type !== 'OFFLINE') {
-      return NextResponse.json(
-        { error: 'Type must be either ONLINE or OFFLINE' },
-        { status: 400 }
-      )
+    // Validate OFFLINE chores must have coordinates
+    if (type === 'OFFLINE') {
+      if (
+        locationLat === undefined ||
+        locationLat === null ||
+        locationLng === undefined ||
+        locationLng === null
+      ) {
+        return NextResponse.json(
+          { error: 'Location coordinates (latitude and longitude) are required for offline chores' },
+          { status: 400 }
+        )
+      }
     }
 
-    // For OFFLINE chores, require location
-    if (type === 'OFFLINE' && !locationAddress) {
-      return NextResponse.json(
-        { error: 'Location address is required for offline chores' },
-        { status: 400 }
-      )
-    }
-
-    const { createChore } = await import('@/server/api/chores')
     const chore = await createChore({
       title,
       description,
       type,
       category,
-      budget: budget ? parseInt(budget) : undefined,
-      locationAddress,
-      locationLat: locationLat ? parseFloat(locationLat) : undefined,
-      locationLng: locationLng ? parseFloat(locationLng) : undefined,
-      dueAt,
+      budget: budget !== undefined && budget !== null ? Number(budget) : undefined,
+      locationAddress: locationAddress || undefined,
+      locationLat: locationLat !== undefined && locationLat !== null ? Number(locationLat) : undefined,
+      locationLng: locationLng !== undefined && locationLng !== null ? Number(locationLng) : undefined,
+      dueAt: dueAt || undefined,
+      imageUrl: imageUrl, // Already normalized to string | null above
       createdById: user.id,
     })
 
@@ -93,8 +70,7 @@ export async function POST(request: NextRequest) {
     console.error('Error creating chore:', error)
     return NextResponse.json(
       { error: 'Failed to create chore' },
-      { status: 500 }
+      { status: 400 }
     )
   }
 }
-

@@ -1,16 +1,21 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { ChoreStatus, UserRole } from '@prisma/client'
+import { ChoreStatus, ChoreType } from '@prisma/client'
 import ChoreChat from '@/features/chat/chore-chat'
+import MapPreview from '@/components/MapPreview'
+import Button from '@/components/ui/Button'
+import Badge from '@/components/ui/Badge'
+import Card from '@/components/ui/Card'
 
 interface ChoreDetailClientProps {
   chore: any
   currentUser: any
   initialApplications: any[] | null
   hasRated?: boolean
+  assignedWorkerRating?: { average: number; count: number } | null
 }
 
 export default function ChoreDetailClient({
@@ -18,6 +23,7 @@ export default function ChoreDetailClient({
   currentUser,
   initialApplications,
   hasRated: initialHasRated = false,
+  assignedWorkerRating = null,
 }: ChoreDetailClientProps) {
   const router = useRouter()
   const [applications, setApplications] = useState(initialApplications || [])
@@ -35,10 +41,51 @@ export default function ChoreDetailClient({
   const [ratingComment, setRatingComment] = useState('')
   const [submittingRating, setSubmittingRating] = useState(false)
   const [hasRated, setHasRated] = useState(initialHasRated)
+  const [myRating, setMyRating] = useState<any>(null)
+  const [choreRating, setChoreRating] = useState<any>(null)
+  const [loadingRatings, setLoadingRatings] = useState(false)
 
-  const isOwner = currentUser && currentUser.role === 'CUSTOMER' && chore.createdById === currentUser.id
+  const isOwner =
+    currentUser && currentUser.role === 'CUSTOMER' && chore.createdById === currentUser.id
   const isWorker = currentUser && currentUser.role === 'WORKER'
   const isAssignedWorker = currentUser && chore.assignedWorkerId === currentUser.id
+
+  // Worker can apply only if:
+  // - logged in
+  // - role = WORKER
+  // - chore is PUBLISHED
+  // - no worker assigned yet
+  const canApply =
+    !!currentUser &&
+    currentUser.role === 'WORKER' &&
+    chore.status === 'PUBLISHED' &&
+    !chore.assignedWorkerId
+
+  // Load ratings on mount
+  useEffect(() => {
+    if (currentUser) {
+      setLoadingRatings(true)
+      fetch(`/api/chores/${chore.id}/rating`)
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.myRating) {
+            setHasRated(true)
+            setRatingScore(data.myRating.score)
+            setRatingComment(data.myRating.comment || '')
+            setMyRating(data.myRating)
+          }
+          if (data.choreRating) {
+            setChoreRating(data.choreRating)
+          }
+        })
+        .catch((error) => {
+          console.error('Error loading ratings:', error)
+        })
+        .finally(() => {
+          setLoadingRatings(false)
+        })
+    }
+  }, [chore.id, currentUser])
 
   const handleApply = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -98,6 +145,7 @@ export default function ChoreDetailClient({
       }
 
       setSuccess('Chore assigned successfully!')
+      
       // Update applications state
       setApplications(
         applications.map((app) => {
@@ -108,8 +156,11 @@ export default function ChoreDetailClient({
             return { ...app, status: 'REJECTED' }
           }
           return app
-        })
+        }),
       )
+      
+      // Update chore status in local state (optimistic update)
+      // The router.refresh() will fetch the updated chore from the server
       router.refresh()
     } catch (err) {
       setError('An error occurred. Please try again.')
@@ -142,7 +193,7 @@ export default function ChoreDetailClient({
       setSuccess(
         action === 'start'
           ? 'Chore marked as in progress!'
-          : 'Chore marked as completed!'
+          : 'Chore marked as completed!',
       )
       router.refresh()
     } catch (err) {
@@ -179,7 +230,22 @@ export default function ChoreDetailClient({
 
       setSuccess('Rating submitted successfully!')
       setHasRated(true)
-      setRatingComment('')
+      setMyRating(data.rating)
+      setChoreRating(data.rating)
+      // Pre-fill form with submitted rating
+      setRatingScore(data.rating.score)
+      setRatingComment(data.rating.comment || '')
+      // Refresh ratings from server
+      const refreshRes = await fetch(`/api/chores/${chore.id}/rating`)
+      if (refreshRes.ok) {
+        const refreshData = await refreshRes.json()
+        if (refreshData.myRating) {
+          setMyRating(refreshData.myRating)
+        }
+        if (refreshData.choreRating) {
+          setChoreRating(refreshData.choreRating)
+        }
+      }
       router.refresh()
     } catch (err) {
       setError('An error occurred. Please try again.')
@@ -188,95 +254,104 @@ export default function ChoreDetailClient({
     }
   }
 
-  const getStatusBadgeColor = (status: ChoreStatus) => {
+  const getStatusBadgeVariant = (status: ChoreStatus): 'statusDraft' | 'statusPublished' | 'statusAssigned' | 'statusInProgress' | 'statusCompleted' | 'statusCancelled' => {
     switch (status) {
       case 'DRAFT':
-        return 'bg-gray-100 text-gray-800'
+        return 'statusDraft'
       case 'PUBLISHED':
-        return 'bg-blue-100 text-blue-800'
+        return 'statusPublished'
       case 'ASSIGNED':
-        return 'bg-orange-100 text-orange-800'
+        return 'statusAssigned'
       case 'IN_PROGRESS':
-        return 'bg-yellow-100 text-yellow-800'
+        return 'statusInProgress'
       case 'COMPLETED':
-        return 'bg-green-100 text-green-800'
+        return 'statusCompleted'
       case 'CANCELLED':
-        return 'bg-red-100 text-red-800'
+        return 'statusCancelled'
       default:
-        return 'bg-gray-100 text-gray-800'
+        return 'statusDraft'
     }
   }
 
-  const getTypeBadgeColor = (type: string) => {
+  const getTypeBadgeVariant = (type: ChoreType): 'typeOnline' | 'typeOffline' => {
     switch (type) {
       case 'ONLINE':
-        return 'bg-indigo-100 text-indigo-800'
+        return 'typeOnline'
       case 'OFFLINE':
-        return 'bg-teal-100 text-teal-800'
+        return 'typeOffline'
       default:
-        return 'bg-gray-100 text-gray-800'
+        return 'typeOnline'
     }
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-gray-50 dark:bg-slate-950 py-12 px-4 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-4xl">
+        {/* Status debug line */}
+        <div className="mb-2 text-xs text-gray-500 dark:text-slate-400">
+          Status: {chore.status} | You are: {currentUser?.role ?? 'Guest'}
+        </div>
+
         {/* Back link */}
         <Link
           href="/chores"
-          className="text-sm text-blue-600 hover:text-blue-500 mb-4 inline-block"
+          className="mb-4 inline-block text-sm text-blue-600 hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300 transition-colors"
         >
           ← Back to Chores
         </Link>
 
         {/* Chore details */}
-        <div className="rounded-lg bg-white shadow mb-6">
-          <div className="p-6">
-            <div className="flex items-start justify-between mb-4">
-              <h1 className="text-3xl font-bold text-gray-900">{chore.title}</h1>
-              <div className="flex gap-2">
-                <span
-                  className={`inline-flex items-center rounded-full px-3 py-1 text-sm font-medium ${getTypeBadgeColor(
-                    chore.type
-                  )}`}
-                >
-                  {chore.type}
-                </span>
-                <span
-                  className={`inline-flex items-center rounded-full px-3 py-1 text-sm font-medium ${getStatusBadgeColor(
-                    chore.status
-                  )}`}
-                >
-                  {chore.status.replace('_', ' ')}
-                </span>
-              </div>
+        <Card className="mb-6">
+          {/* Chore Image */}
+          {chore.imageUrl && (
+            <div className="mb-6 -mx-4 sm:-mx-6">
+              <img
+                src={chore.imageUrl}
+                alt={chore.title}
+                className="w-full h-64 object-cover rounded-t-xl"
+              />
             </div>
+          )}
+          
+          <div className="mb-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-slate-50">{chore.title}</h1>
+            <div className="flex gap-2">
+              <Badge variant={getTypeBadgeVariant(chore.type)}>
+                {chore.type}
+              </Badge>
+              <Badge variant={getStatusBadgeVariant(chore.status)}>
+                {chore.status.replace('_', ' ')}
+              </Badge>
+            </div>
+          </div>
 
-            <div className="space-y-4 mb-6">
+            <div className="mb-6 space-y-4">
               <div>
-                <h3 className="text-sm font-medium text-gray-500">Description</h3>
-                <p className="mt-1 text-gray-900 whitespace-pre-wrap">{chore.description}</p>
+                <h3 className="text-sm font-medium text-gray-500 dark:text-slate-400">Description</h3>
+                <p className="mt-1 whitespace-pre-wrap text-gray-900 dark:text-slate-200">
+                  {chore.description}
+                </p>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <h3 className="text-sm font-medium text-gray-500">Type</h3>
-                  <p className="mt-1 text-gray-900">{chore.type}</p>
+                  <h3 className="text-sm font-medium text-gray-500 dark:text-slate-400">Type</h3>
+                  <p className="mt-1 text-gray-900 dark:text-slate-200">{chore.type}</p>
                 </div>
                 <div>
-                  <h3 className="text-sm font-medium text-gray-500">Category</h3>
-                  <p className="mt-1 text-gray-900">{chore.category}</p>
+                  <h3 className="text-sm font-medium text-gray-500 dark:text-slate-400">Category</h3>
+                  <p className="mt-1 text-gray-900 dark:text-slate-200">{chore.category}</p>
                 </div>
                 {chore.budget && (
                   <div>
-                    <h3 className="text-sm font-medium text-gray-500">Budget</h3>
-                    <p className="mt-1 text-gray-900">${chore.budget}</p>
+                    <h3 className="text-sm font-medium text-gray-500 dark:text-slate-400">Budget</h3>
+                    <p className="mt-1 text-gray-900 dark:text-slate-200">${chore.budget}</p>
                   </div>
                 )}
                 {chore.dueAt && (
                   <div>
-                    <h3 className="text-sm font-medium text-gray-500">Due Date</h3>
-                    <p className="mt-1 text-gray-900">
+                    <h3 className="text-sm font-medium text-gray-500 dark:text-slate-400">Due Date</h3>
+                    <p className="mt-1 text-gray-900 dark:text-slate-200">
                       {new Date(chore.dueAt).toLocaleDateString()}
                     </p>
                   </div>
@@ -285,79 +360,121 @@ export default function ChoreDetailClient({
 
               {chore.type === 'OFFLINE' && chore.locationAddress && (
                 <div>
-                  <h3 className="text-sm font-medium text-gray-500">Location</h3>
-                  <p className="mt-1 text-gray-900">{chore.locationAddress}</p>
+                  <h3 className="text-sm font-medium text-gray-500 dark:text-slate-400">Location</h3>
+                  <p className="mt-1 text-gray-900 dark:text-slate-200">{chore.locationAddress}</p>
                 </div>
               )}
 
+              {/* Location Map - Only for OFFLINE chores with coordinates */}
+              {chore.type === 'OFFLINE' &&
+                chore.locationLat &&
+                chore.locationLng && (
+                  <div>
+                    <h3 className="text-sm font-medium text-gray-500 dark:text-slate-400 mb-2">
+                      Location Map
+                    </h3>
+                    <MapPreview
+                      lat={chore.locationLat}
+                      lng={chore.locationLng}
+                      heightClass="h-64"
+                      markerLabel={chore.locationAddress || chore.title}
+                    />
+                  </div>
+                )}
+
               <div>
-                <h3 className="text-sm font-medium text-gray-500">Posted by</h3>
-                <p className="mt-1 text-gray-900">{chore.createdBy.name}</p>
+                <h3 className="text-sm font-medium text-gray-500 dark:text-slate-400">Posted by</h3>
+                <p className="mt-1 text-gray-900 dark:text-slate-200">{chore.createdBy.name}</p>
               </div>
 
               {chore.assignedWorker && (
                 <div>
-                  <h3 className="text-sm font-medium text-gray-500">Assigned to</h3>
-                  <Link
-                    href={`/profile/${chore.assignedWorker.id}`}
-                    className="mt-1 text-gray-900 hover:text-blue-600"
-                  >
-                    {chore.assignedWorker.name}
-                  </Link>
+                  <h3 className="text-sm font-medium text-gray-500 dark:text-slate-400">Assigned to</h3>
+                  <div className="mt-1">
+                    <Link
+                      href={`/profile/${chore.assignedWorker.id}`}
+                      className="text-blue-600 hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300 font-medium transition-colors"
+                    >
+                      {chore.assignedWorker.name}
+                    </Link>
+                    {assignedWorkerRating && assignedWorkerRating.count > 0 && (
+                      <div className="mt-1 flex items-center gap-2">
+                        <div className="flex items-center">
+                          {[1, 2, 3, 4, 5].map((star) => (
+                            <span
+                              key={star}
+                              className={`text-sm ${
+                                star <= Math.round(assignedWorkerRating.average)
+                                  ? 'text-yellow-400'
+                                  : 'text-gray-300 dark:text-slate-600'
+                              }`}
+                            >
+                              ★
+                            </span>
+                          ))}
+                        </div>
+                        <span className="text-sm text-gray-600 dark:text-slate-400">
+                          {assignedWorkerRating.average.toFixed(1)} ({assignedWorkerRating.count} reviews)
+                        </span>
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
-          </div>
-        </div>
+          </Card>
 
         {/* Error/Success messages */}
         {error && (
-          <div className="rounded-md bg-red-50 p-4 mb-6">
-            <p className="text-sm text-red-800">{error}</p>
+          <div className="mb-6 rounded-md bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 p-4">
+            <p className="text-sm text-red-800 dark:text-red-300">{error}</p>
           </div>
         )}
         {success && (
-          <div className="rounded-md bg-green-50 p-4 mb-6">
-            <p className="text-sm text-green-800">{success}</p>
+          <div className="mb-6 rounded-md bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 p-4">
+            <p className="text-sm text-green-800 dark:text-green-300">{success}</p>
           </div>
         )}
 
         {/* Worker: Prominent Apply Now button */}
-        {isWorker && chore.status === 'PUBLISHED' && !isAssignedWorker && (
-          <div className="rounded-lg bg-blue-50 border-2 border-blue-200 p-6 mb-6">
-            <div className="flex items-center justify-between">
+        {canApply && (
+          <Card className="mb-6 border-2 border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
               <div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                <h3 className="mb-2 text-lg font-semibold text-gray-900 dark:text-slate-50">
                   Interested in this chore?
                 </h3>
-                <p className="text-sm text-gray-600">
+                <p className="text-sm text-gray-600 dark:text-slate-300">
                   Apply now to get started and submit your bid.
                 </p>
               </div>
-              <button
+              <Button
                 onClick={() => {
                   const formElement = document.getElementById('apply-form')
                   formElement?.scrollIntoView({ behavior: 'smooth', block: 'start' })
                 }}
-                className="rounded-md bg-blue-600 px-6 py-3 text-base font-semibold text-white hover:bg-blue-500 shadow-lg"
+                variant="primary"
+                size="lg"
+                className="shadow-lg"
               >
                 Apply Now
-              </button>
+              </Button>
             </div>
-          </div>
+          </Card>
         )}
 
         {/* Worker: Apply/Bid form */}
-        {isWorker && chore.status === 'PUBLISHED' && !isAssignedWorker && (
+        {canApply && (
           <div id="apply-form">
-            <div className="rounded-lg bg-white shadow mb-6">
-              <div className="p-6">
-                <h2 className="text-xl font-semibold text-gray-900 mb-4">Apply for this Chore</h2>
-                <form onSubmit={handleApply} className="space-y-4">
+            <Card className="mb-6">
+              <h2 className="mb-4 text-xl font-semibold text-gray-900 dark:text-slate-50">
+                Apply for this Chore
+              </h2>
+              <form onSubmit={handleApply} className="space-y-4">
                 <div>
                   <label
                     htmlFor="bidAmount"
-                    className="block text-sm font-medium text-gray-700"
+                    className="block text-sm font-medium text-gray-700 dark:text-slate-300"
                   >
                     Bid Amount (optional)
                   </label>
@@ -366,7 +483,7 @@ export default function ChoreDetailClient({
                     id="bidAmount"
                     min="0"
                     step="0.01"
-                    className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 sm:text-sm"
+                    className="mt-1 block w-full rounded-md border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-gray-900 dark:text-slate-200 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 sm:text-sm"
                     value={bidAmount}
                     onChange={(e) => setBidAmount(e.target.value)}
                   />
@@ -374,208 +491,296 @@ export default function ChoreDetailClient({
                 <div>
                   <label
                     htmlFor="message"
-                    className="block text-sm font-medium text-gray-700"
+                    className="block text-sm font-medium text-gray-700 dark:text-slate-300"
                   >
                     Message (optional)
                   </label>
                   <textarea
                     id="message"
                     rows={4}
-                    className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 sm:text-sm"
+                    className="mt-1 block w-full rounded-md border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-gray-900 dark:text-slate-200 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 sm:text-sm"
                     value={message}
                     onChange={(e) => setMessage(e.target.value)}
                   />
                 </div>
-                <button
+                <Button
                   type="submit"
                   disabled={submitting}
-                  className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-500 disabled:opacity-50"
+                  variant="primary"
                 >
                   {submitting ? 'Submitting...' : 'Submit Application'}
-                </button>
-                </form>
-              </div>
-            </div>
+                </Button>
+              </form>
+            </Card>
           </div>
         )}
 
         {/* Customer: Applications list */}
         {isOwner && applications && applications.length > 0 && (
-          <div className="rounded-lg bg-white shadow">
-            <div className="p-6">
-              <h2 className="text-xl font-semibold text-gray-900 mb-4">
-                Applications ({applications.length})
-              </h2>
+          <Card className="mb-6">
+            <h2 className="mb-4 text-xl font-semibold text-gray-900">
+              Applications ({applications.length})
+            </h2>
               <div className="space-y-4">
                 {applications.map((app) => (
                   <div
                     key={app.id}
-                    className="border border-gray-200 rounded-lg p-4"
+                    className="rounded-lg border border-gray-200 dark:border-slate-700 p-4 bg-gray-50 dark:bg-slate-800/50"
                   >
-                    <div className="flex items-start justify-between mb-2">
-                      <div>
-                        <h3 className="font-medium text-gray-900">{app.worker.name}</h3>
-                        <p className="text-sm text-gray-500">{app.worker.email}</p>
+                    <div className="mb-2 flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <h3 className="font-medium text-gray-900 dark:text-slate-50">
+                            {app.worker.name}
+                          </h3>
+                          {app.workerRating && app.workerRating.count > 0 && (
+                            <div className="flex items-center gap-1">
+                              <div className="flex items-center">
+                                {[1, 2, 3, 4, 5].map((star) => (
+                                  <span
+                                    key={star}
+                                    className={`text-xs ${
+                                      star <= Math.round(app.workerRating.average)
+                                        ? 'text-yellow-400'
+                                        : 'text-gray-300 dark:text-slate-600'
+                                    }`}
+                                  >
+                                    ★
+                                  </span>
+                                ))}
+                              </div>
+                              <span className="text-xs text-gray-600 dark:text-slate-400">
+                                {app.workerRating.average.toFixed(1)} ({app.workerRating.count})
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                        <p className="text-sm text-gray-500 dark:text-slate-400">
+                          {app.worker.email}
+                        </p>
                       </div>
-                      <span
-                        className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                      <Badge
+                        variant={
                           app.status === 'ACCEPTED'
-                            ? 'bg-green-100 text-green-800'
+                            ? 'statusCompleted'
                             : app.status === 'REJECTED'
-                            ? 'bg-red-100 text-red-800'
-                            : 'bg-yellow-100 text-yellow-800'
-                        }`}
+                            ? 'statusCancelled'
+                            : 'statusPublished'
+                        }
                       >
                         {app.status}
-                      </span>
+                      </Badge>
                     </div>
                     {app.bidAmount && (
-                      <p className="text-sm text-gray-600 mb-2">
+                      <p className="mb-2 text-sm text-gray-600 dark:text-slate-300">
                         <span className="font-medium">Bid:</span> ${app.bidAmount}
                       </p>
                     )}
                     {app.message && (
-                      <p className="text-sm text-gray-600 mb-2">{app.message}</p>
+                      <p className="mb-2 text-sm text-gray-600 dark:text-slate-300">{app.message}</p>
                     )}
-                    <p className="text-xs text-gray-500">
+                    <p className="text-xs text-gray-500 dark:text-slate-400">
                       Applied on {new Date(app.createdAt).toLocaleDateString()}
                     </p>
                     {app.status === 'PENDING' && chore.status === 'PUBLISHED' && (
-                      <button
+                      <Button
                         onClick={() => handleAssign(app.id)}
                         disabled={loading}
-                        className="mt-2 rounded-md bg-green-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-green-500 disabled:opacity-50"
+                        variant="primary"
+                        size="sm"
+                        className="mt-2 bg-green-600 hover:bg-green-500"
                       >
                         Assign
-                      </button>
+                      </Button>
                     )}
                   </div>
                 ))}
               </div>
-            </div>
-          </div>
+            </Card>
         )}
 
         {isOwner && applications && applications.length === 0 && (
-          <div className="rounded-lg bg-white shadow p-6">
-            <p className="text-gray-500">No applications yet.</p>
-          </div>
+          <Card className="mb-6 text-center">
+            <div className="max-w-md mx-auto py-8">
+              <div className="text-5xl mb-4">📋</div>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-50 mb-2">
+                No applications yet
+              </h3>
+              <p className="text-gray-500 dark:text-slate-400">
+                Workers will see this in their nearby list if location is set. Check back soon!
+              </p>
+            </div>
+          </Card>
         )}
 
         {/* Assigned Worker: Status update buttons */}
         {isAssignedWorker && (
-          <div className="rounded-lg bg-white shadow mb-6">
-            <div className="p-6">
-              <h2 className="text-xl font-semibold text-gray-900 mb-4">Update Status</h2>
+          <Card className="mb-6">
+            <h2 className="mb-4 text-xl font-semibold text-gray-900 dark:text-slate-50">
+              Update Status
+            </h2>
+            <div className="flex gap-3">
               {chore.status === 'ASSIGNED' && (
-                <button
+                <Button
                   onClick={() => handleStatusUpdate('start')}
                   disabled={loading}
-                  className="rounded-md bg-purple-600 px-4 py-2 text-sm font-semibold text-white hover:bg-purple-500 disabled:opacity-50"
+                  variant="primary"
+                  className="bg-purple-600 hover:bg-purple-500 dark:bg-purple-500 dark:hover:bg-purple-400"
                 >
                   {loading ? 'Updating...' : 'Start Chore'}
-                </button>
+                </Button>
               )}
               {chore.status === 'IN_PROGRESS' && (
-                <button
+                <Button
                   onClick={() => handleStatusUpdate('complete')}
                   disabled={loading}
-                  className="rounded-md bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-500 disabled:opacity-50"
+                  variant="primary"
+                  className="bg-green-600 hover:bg-green-500 dark:bg-green-500 dark:hover:bg-green-400"
                 >
                   {loading ? 'Updating...' : 'Mark as Completed'}
-                </button>
+                </Button>
               )}
             </div>
-          </div>
+          </Card>
+        )}
+
+        {/* Rating for this chore - Read-only card visible to all users */}
+        {choreRating && (
+          <Card className="mb-6">
+            <h2 className="mb-4 text-xl font-semibold text-gray-900 dark:text-slate-50">
+              Rating for this Chore
+            </h2>
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <span
+                      key={star}
+                      className={`text-2xl ${
+                        star <= choreRating.score
+                          ? 'text-yellow-400'
+                          : 'text-gray-300 dark:text-slate-600'
+                      }`}
+                    >
+                      ★
+                    </span>
+                  ))}
+                  <span className="ml-2 text-sm font-medium text-gray-900 dark:text-slate-50">
+                    {choreRating.score}/5
+                  </span>
+                </div>
+                {choreRating.comment && (
+                  <p className="text-sm text-gray-700 dark:text-slate-300">{choreRating.comment}</p>
+                )}
+                <p className="text-xs text-gray-500 dark:text-slate-400">
+                  By {choreRating.fromUser.name}
+                </p>
+              </div>
+            </Card>
         )}
 
         {/* Rating Form - Only for CUSTOMER after COMPLETED */}
-        {isOwner && chore.status === 'COMPLETED' && !hasRated && currentUser.role === 'CUSTOMER' && (
-          <div className="rounded-lg bg-white shadow mb-6">
-            <div className="p-6">
-              <h2 className="text-xl font-semibold text-gray-900 mb-4">Rate Worker</h2>
-              <form onSubmit={handleSubmitRating} className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Rating (1-5 stars)
-                  </label>
-                  <div className="flex items-center gap-2">
-                    {[1, 2, 3, 4, 5].map((star) => (
-                      <button
-                        key={star}
-                        type="button"
-                        onClick={() => setRatingScore(star)}
-                        className={`text-2xl ${
-                          star <= ratingScore ? 'text-yellow-400' : 'text-gray-300'
-                        } hover:text-yellow-400 transition-colors`}
-                      >
-                        ★
-                      </button>
-                    ))}
-                    <span className="ml-2 text-sm text-gray-600">
-                      ({ratingScore}/5)
-                    </span>
+        {currentUser &&
+          currentUser.role === 'CUSTOMER' &&
+          isOwner &&
+          chore.status === 'COMPLETED' &&
+          !hasRated && (
+            <Card className="mb-6">
+              <h2 className="mb-4 text-xl font-semibold text-gray-900">
+                Rate Worker
+              </h2>
+                <form onSubmit={handleSubmitRating} className="space-y-4">
+                  <div>
+                    <label className="mb-2 block text-sm font-medium text-gray-700">
+                      Rating (1-5 stars)
+                    </label>
+                    <div className="flex items-center gap-2">
+                      {[1, 2, 3, 4, 5].map((star) => (
+                        <button
+                          key={star}
+                          type="button"
+                          onClick={() => setRatingScore(star)}
+                          className={`text-2xl ${
+                            star <= ratingScore
+                              ? 'text-yellow-400'
+                              : 'text-gray-300'
+                          } hover:text-yellow-400 transition-colors`}
+                        >
+                          ★
+                        </button>
+                      ))}
+                      <span className="ml-2 text-sm text-gray-600">
+                        ({ratingScore}/5)
+                      </span>
+                    </div>
                   </div>
-                </div>
-                <div>
-                  <label
-                    htmlFor="ratingComment"
-                    className="block text-sm font-medium text-gray-700"
+                  <div>
+                    <label
+                      htmlFor="ratingComment"
+                      className="block text-sm font-medium text-gray-700"
+                    >
+                      Comment (optional)
+                    </label>
+                    <textarea
+                      id="ratingComment"
+                      rows={4}
+                      className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-black shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 sm:text-sm"
+                      value={ratingComment}
+                      onChange={(e) => setRatingComment(e.target.value)}
+                      placeholder="Share your experience..."
+                    />
+                  </div>
+                  <Button
+                    type="submit"
+                    disabled={submittingRating}
+                    variant="primary"
                   >
-                    Comment (optional)
-                  </label>
-                  <textarea
-                    id="ratingComment"
-                    rows={4}
-                    className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 sm:text-sm"
-                    value={ratingComment}
-                    onChange={(e) => setRatingComment(e.target.value)}
-                    placeholder="Share your experience..."
-                  />
-                </div>
-                <button
-                  type="submit"
-                  disabled={submittingRating}
-                  className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-500 disabled:opacity-50"
-                >
-                  {submittingRating ? 'Submitting...' : 'Submit Rating'}
-                </button>
-              </form>
-            </div>
-          </div>
-        )}
+                    {submittingRating ? 'Submitting...' : 'Submit Rating'}
+                  </Button>
+                </form>
+              </Card>
+          )}
+
+        {/* Rating info message - show when COMPLETED but user is not customer */}
+        {chore.status === 'COMPLETED' &&
+          currentUser &&
+          currentUser.role !== 'CUSTOMER' &&
+          !isOwner && (
+            <Card className="mb-6">
+              <h2 className="mb-2 text-xl font-semibold text-gray-900 dark:text-slate-50">Rating</h2>
+              <p className="text-sm text-gray-600 dark:text-slate-400">
+                Only the customer can rate this chore.
+              </p>
+            </Card>
+          )}
 
         {/* Chat - Only visible when assigned and status allows */}
-        {(isOwner || isAssignedWorker) &&
+        {currentUser &&
+          (isOwner || isAssignedWorker) &&
           chore.assignedWorkerId &&
           (chore.status === 'ASSIGNED' ||
             chore.status === 'IN_PROGRESS' ||
             chore.status === 'COMPLETED') && (
-            <div className="rounded-lg bg-white shadow">
-              <div className="p-6">
-                <h2 className="text-xl font-semibold text-gray-900 mb-4">Chat</h2>
-                <ChoreChat choreId={chore.id} currentUserId={currentUser.id} />
-              </div>
-            </div>
+            <Card className="mb-6">
+              <h2 className="mb-4 text-xl font-semibold text-gray-900 dark:text-slate-50">Chat</h2>
+              <ChoreChat choreId={chore.id} currentUserId={currentUser.id} />
+            </Card>
           )}
 
-        {/* Chat unavailable message */}
-        {(isOwner || isAssignedWorker) &&
+        {/* Chat unavailable message - show when user is owner/assigned worker but chat not available yet */}
+        {currentUser &&
+          (isOwner || isAssignedWorker) &&
           (!chore.assignedWorkerId ||
             (chore.status !== 'ASSIGNED' &&
               chore.status !== 'IN_PROGRESS' &&
               chore.status !== 'COMPLETED')) && (
-            <div className="rounded-lg bg-white shadow">
-              <div className="p-6">
-                <h2 className="text-xl font-semibold text-gray-900 mb-2">Chat</h2>
-                <p className="text-sm text-gray-600">
-                  Chat becomes available once the chore is assigned.
-                </p>
-              </div>
-            </div>
+            <Card className="mb-6">
+              <h2 className="mb-2 text-xl font-semibold text-gray-900 dark:text-slate-50">Chat</h2>
+              <p className="text-sm text-gray-600 dark:text-slate-400">
+                Chat becomes available once the chore has been assigned to a worker.
+              </p>
+            </Card>
           )}
       </div>
     </div>
   )
 }
-

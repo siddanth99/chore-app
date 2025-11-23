@@ -1,58 +1,44 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createApplication, listApplicationsForChore } from '@/server/api/applications'
-import { requireAuth, requireRole } from '@/server/auth/role'
+import { requireRole } from '@/server/auth/role'
 import { UserRole } from '@prisma/client'
+import { createApplication } from '@/server/api/applications'
 
-/**
- * POST /api/chores/[choreId]/applications - Create an application/bid (WORKER only)
- */
+// Next.js 14+ — dynamic route params are a Promise and must be awaited
 export async function POST(
   request: NextRequest,
-  { params }: { params: { choreId: string } }
+  context: { params: Promise<{ choreId: string }> }
 ) {
   try {
+    // Ensure only workers can apply
     const user = await requireRole(UserRole.WORKER)
-    const { choreId } = params
+
+    // ✅ unwrap params promise
+    const { choreId } = await context.params
+
+    if (!choreId) {
+      return NextResponse.json({ error: "Missing choreId" }, { status: 400 })
+    }
+
     const body = await request.json()
     const { bidAmount, message } = body
 
+    // Create application
     const application = await createApplication({
       choreId,
       workerId: user.id,
-      bidAmount: bidAmount ? parseInt(bidAmount) : undefined,
-      message,
+      bidAmount:
+        bidAmount !== undefined && bidAmount !== null
+          ? Number(bidAmount)
+          : undefined,
+      message: message || undefined,
     })
 
     return NextResponse.json({ application }, { status: 201 })
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error creating application:', error)
     return NextResponse.json(
-      { error: error.message || 'Failed to create application' },
+      { error: 'Failed to create application' },
       { status: 400 }
     )
   }
 }
-
-/**
- * GET /api/chores/[choreId]/applications - List applications for a chore (CUSTOMER owner only)
- */
-export async function GET(
-  request: NextRequest,
-  { params }: { params: { choreId: string } }
-) {
-  try {
-    const user = await requireRole(UserRole.CUSTOMER)
-    const { choreId } = params
-
-    const applications = await listApplicationsForChore(choreId, user.id)
-
-    return NextResponse.json({ applications })
-  } catch (error: any) {
-    console.error('Error listing applications:', error)
-    return NextResponse.json(
-      { error: error.message || 'Failed to fetch applications' },
-      { status: 403 }
-    )
-  }
-}
-

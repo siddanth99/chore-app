@@ -1,18 +1,22 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { assignApplication } from '@/server/api/applications'
-import { requireRole } from '@/server/auth/role'
+// web/app/api/applications/[applicationId]/assign/route.ts
+import { NextResponse } from 'next/server'
 import { UserRole } from '@prisma/client'
+import { requireRole } from '@/server/auth/role'
+import { assignApplication } from '@/server/api/applications'
 
-/**
- * POST /api/applications/[applicationId]/assign - Assign a chore to a worker (CUSTOMER owner only)
- */
+// In Next 15, params is a Promise – we model that here
+type AssignParams = Promise<{ applicationId: string }>
+
 export async function POST(
-  request: NextRequest,
-  { params }: { params: { applicationId: string } }
+  request: Request,
+  { params }: { params: AssignParams }
 ) {
   try {
+    // Only CUSTOMERS can assign
     const user = await requireRole(UserRole.CUSTOMER)
-    const { applicationId } = params
+
+    // 🔑 IMPORTANT: await params before using applicationId
+    const { applicationId } = await params
 
     const result = await assignApplication(applicationId, user.id)
 
@@ -20,9 +24,8 @@ export async function POST(
   } catch (error: any) {
     console.error('Error assigning application:', error)
     return NextResponse.json(
-      { error: error.message || 'Failed to assign application' },
+      { error: error.message ?? 'Failed to assign application' },
       { status: 400 }
     )
   }
 }
-

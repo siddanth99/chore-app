@@ -1,24 +1,26 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { listApplicationsForWorker } from '@/server/api/applications'
-import { requireRole } from '@/server/auth/role'
+import { NextResponse } from 'next/server'
 import { UserRole } from '@prisma/client'
+import { requireRole } from '@/server/auth/role'
+import { listApplicationsForWorkerDashboard } from '@/server/api/applications'
 
-/**
- * GET /api/applications - List applications for the current worker
- */
-export async function GET(request: NextRequest) {
+// GET /api/applications
+// Returns the current worker's applications for use in the dashboard
+export async function GET() {
   try {
+    // Only workers should hit this endpoint
     const user = await requireRole(UserRole.WORKER)
 
-    const applications = await listApplicationsForWorker(user.id)
+    const applications = await listApplicationsForWorkerDashboard(user.id)
 
     return NextResponse.json({ applications })
-  } catch (error: any) {
-    console.error('Error listing applications:', error)
+  } catch (err: any) {
+    console.error('Error in GET /api/applications:', err)
+
+    // If requireRole threw, it already sent a 401/403 in practice,
+    // but we keep a generic 500 fallback here.
     return NextResponse.json(
-      { error: error.message || 'Failed to fetch applications' },
-      { status: 403 }
+      { error: err.message ?? 'Failed to load applications' },
+      { status: 500 }
     )
   }
 }
-

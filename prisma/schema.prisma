@@ -2,7 +2,7 @@
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
 generator client {
-  provider   = "prisma-client-js"
+  provider = "prisma-client-js"
 }
 
 datasource db {
@@ -12,29 +12,29 @@ datasource db {
 
 // User model with role-based access
 model User {
-  id            String    @id @default(cuid())
-  name          String
-  email         String    @unique
+  id             String   @id @default(cuid())
+  name           String
+  email          String   @unique
   hashedPassword String
-  role          UserRole  @default(CUSTOMER)
-  bio           String?
-  avatarUrl     String?
-  baseLocation  String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  role           UserRole @default(CUSTOMER)
+  bio            String?
+  avatarUrl      String?
+  baseLocation   String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   // Relations
-  createdChores      Chore[]         @relation("ChoreCreator")
-  assignedChores     Chore[]         @relation("ChoreWorker")
-  applications       Application[]
-  ratingsGiven       Rating[]        @relation("RatingFrom")
-  ratingsReceived    Rating[]        @relation("RatingTo")
-  sentMessages       ChatMessage[]   @relation("MessageFrom")
-  receivedMessages   ChatMessage[]   @relation("MessageTo")
-  
+  createdChores    Chore[]       @relation("ChoreCreator")
+  assignedChores   Chore[]       @relation("ChoreWorker")
+  applications     Application[]
+  ratingsGiven     Rating[]      @relation("RatingFrom")
+  ratingsReceived  Rating[]      @relation("RatingTo")
+  sentMessages     ChatMessage[] @relation("MessageFrom")
+  receivedMessages ChatMessage[] @relation("MessageTo")
+
   // NextAuth relations
-  accounts           Account[]
-  sessions           Session[]
+  accounts Account[]
+  sessions Session[]
 
   @@map("users")
 }
@@ -47,28 +47,29 @@ enum UserRole {
 
 // Chore model
 model Chore {
-  id              String        @id @default(cuid())
-  title           String
-  description     String
-  type            ChoreType
-  status          ChoreStatus   @default(DRAFT)
-  category        String
-  budget          Int?
-  locationAddress String?
-  locationLat     Float?
-  locationLng     Float?
-  dueAt           DateTime?
-  createdById     String
+  id               String      @id @default(cuid())
+  title            String
+  description      String
+  type             ChoreType
+  status           ChoreStatus @default(DRAFT)
+  category         String
+  budget           Int?
+  imageUrl         String?
+  locationAddress  String?
+  locationLat      Float?
+  locationLng      Float?
+  dueAt            DateTime?
+  createdById      String
   assignedWorkerId String?
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
 
   // Relations
-  createdBy       User          @relation("ChoreCreator", fields: [createdById], references: [id], onDelete: Cascade)
-  assignedWorker  User?         @relation("ChoreWorker", fields: [assignedWorkerId], references: [id])
-  applications    Application[]
-  ratings         Rating[]
-  messages        ChatMessage[]
+  createdBy      User          @relation("ChoreCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  assignedWorker User?         @relation("ChoreWorker", fields: [assignedWorkerId], references: [id])
+  applications   Application[]
+  ratings        Rating[]
+  messages       ChatMessage[]
 
   @@map("chores")
 }
@@ -99,8 +100,8 @@ model Application {
   updatedAt DateTime          @updatedAt
 
   // Relations
-  chore    Chore  @relation(fields: [choreId], references: [id], onDelete: Cascade)
-  worker   User   @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  chore  Chore @relation(fields: [choreId], references: [id], onDelete: Cascade)
+  worker User  @relation(fields: [workerId], references: [id], onDelete: Cascade)
 
   @@unique([choreId, workerId])
   @@map("applications")
@@ -115,18 +116,18 @@ enum ApplicationStatus {
 
 // Rating model
 model Rating {
-  id        String   @id @default(cuid())
-  choreId   String
+  id         String   @id @default(cuid())
+  choreId    String
   fromUserId String
-  toUserId  String
-  score     Int      // 1-5
-  comment   String?
-  createdAt DateTime @default(now())
+  toUserId   String
+  score      Int // 1-5
+  comment    String?
+  createdAt  DateTime @default(now())
 
   // Relations
-  chore    Chore  @relation(fields: [choreId], references: [id], onDelete: Cascade)
-  fromUser User   @relation("RatingFrom", fields: [fromUserId], references: [id], onDelete: Cascade)
-  toUser   User   @relation("RatingTo", fields: [toUserId], references: [id], onDelete: Cascade)
+  chore    Chore @relation(fields: [choreId], references: [id], onDelete: Cascade)
+  fromUser User  @relation("RatingFrom", fields: [fromUserId], references: [id], onDelete: Cascade)
+  toUser   User  @relation("RatingTo", fields: [toUserId], references: [id], onDelete: Cascade)
 
   @@unique([choreId, fromUserId])
   @@map("ratings")
@@ -134,17 +135,17 @@ model Rating {
 
 // ChatMessage model
 model ChatMessage {
-  id        String   @id @default(cuid())
-  choreId   String
+  id         String   @id @default(cuid())
+  choreId    String
   fromUserId String
-  toUserId  String
-  content   String
-  createdAt DateTime @default(now())
+  toUserId   String
+  content    String
+  createdAt  DateTime @default(now())
 
   // Relations
-  chore    Chore  @relation(fields: [choreId], references: [id], onDelete: Cascade)
-  fromUser User   @relation("MessageFrom", fields: [fromUserId], references: [id], onDelete: Cascade)
-  toUser   User   @relation("MessageTo", fields: [toUserId], references: [id], onDelete: Cascade)
+  chore    Chore @relation(fields: [choreId], references: [id], onDelete: Cascade)
+  fromUser User  @relation("MessageFrom", fields: [fromUserId], references: [id], onDelete: Cascade)
+  toUser   User  @relation("MessageTo", fields: [toUserId], references: [id], onDelete: Cascade)
 
   @@map("chat_messages")
 }

@@ -1,3 +1,4 @@
+// web/server/api/applications.ts
 import { prisma } from '../db/client'
 import { ApplicationStatus, ChoreStatus } from '@prisma/client'
 
@@ -8,9 +9,6 @@ export interface CreateApplicationInput {
   message?: string
 }
 
-/**
- * Create a new application/bid for a chore (WORKER only)
- */
 export async function createApplication(input: CreateApplicationInput) {
   // Validate chore exists and is PUBLISHED
   const chore = await prisma.chore.findUnique({
@@ -25,127 +23,24 @@ export async function createApplication(input: CreateApplicationInput) {
     throw new Error('Chore is not available for applications')
   }
 
-  // Check for existing application (PENDING or ACCEPTED)
-  const existingApplication = await prisma.application.findFirst({
-    where: {
-      choreId: input.choreId,
-      workerId: input.workerId,
-      status: {
-        in: [ApplicationStatus.PENDING, ApplicationStatus.ACCEPTED],
-      },
-    },
-  })
-
-  if (existingApplication) {
-    throw new Error('You have already applied for this chore')
-  }
-
   // Create the application
   const application = await prisma.application.create({
     data: {
       choreId: input.choreId,
       workerId: input.workerId,
-      bidAmount: input.bidAmount,
-      message: input.message,
+      bidAmount: input.bidAmount ?? null,
+      message: input.message ?? null,
       status: ApplicationStatus.PENDING,
-    },
-    include: {
-      worker: {
-        select: {
-          id: true,
-          name: true,
-          email: true,
-          role: true,
-        },
-      },
-      chore: {
-        select: {
-          id: true,
-          title: true,
-          status: true,
-        },
-      },
     },
   })
 
   return application
 }
 
-/**
- * List applications for a specific chore (CUSTOMER only - must own the chore)
- */
-export async function listApplicationsForChore(choreId: string, customerId: string) {
-  // Verify the chore belongs to the customer
-  const chore = await prisma.chore.findUnique({
-    where: { id: choreId },
-  })
-
-  if (!chore) {
-    throw new Error('Chore not found')
-  }
-
-  if (chore.createdById !== customerId) {
-    throw new Error('You do not have permission to view applications for this chore')
-  }
-
-  // Get all applications for this chore
-  const applications = await prisma.application.findMany({
-    where: { choreId },
-    include: {
-      worker: {
-        select: {
-          id: true,
-          name: true,
-          email: true,
-          role: true,
-        },
-      },
-    },
-    orderBy: {
-      createdAt: 'desc',
-    },
-  })
-
-  return applications
-}
-
-/**
- * List all applications made by a specific worker
- */
-export async function listApplicationsForWorker(workerId: string) {
-  const applications = await prisma.application.findMany({
-    where: { workerId },
-    include: {
-      chore: {
-        select: {
-          id: true,
-          title: true,
-          description: true,
-          status: true,
-          type: true,
-          budget: true,
-          createdAt: true,
-          createdBy: {
-            select: {
-              id: true,
-              name: true,
-            },
-          },
-        },
-      },
-    },
-    orderBy: {
-      createdAt: 'desc',
-    },
-  })
-
-  return applications
-}
-
-/**
- * Assign a chore to a worker by accepting their application
- */
-export async function assignApplication(applicationId: string, customerId: string) {
+export async function assignApplication(
+  applicationId: string,
+  customerId: string
+) {
   // Load the application and its chore
   const application = await prisma.application.findUnique({
     where: { id: applicationId },
@@ -158,28 +53,44 @@ export async function assignApplication(applicationId: string, customerId: strin
     throw new Error('Application not found')
   }
 
-  const chore = application.chore
-
-  // Validate ownership
-  if (chore.createdById !== customerId) {
-    throw new Error('You do not have permission to assign this chore')
+  // Only the owner of the chore can assign
+  if (application.chore.createdById !== customerId) {
+    throw new Error('You are not allowed to assign this chore')
   }
 
-  // Validate chore status
-  if (chore.status !== ChoreStatus.PUBLISHED) {
-    throw new Error('Chore is not available for assignment')
-  }
-
-  // Validate application status
   if (application.status !== ApplicationStatus.PENDING) {
-    throw new Error('Application is not pending')
+    throw new Error('Only pending applications can be assigned')
   }
 
-  // Use a transaction to update everything atomically
+  // Only allow assignment when chore is PUBLISHED
+  if (application.chore.status !== ChoreStatus.PUBLISHED) {
+    throw new Error('Chore must be PUBLISHED to be assigned')
+  }
+
+  // Do everything in a transaction
   const result = await prisma.$transaction(async (tx) => {
-    // Accept the selected application
+    // 1) Update the chore
+    const updatedChore = await tx.chore.update({
+      where: { id: application.choreId },
+      data: {
+        status: ChoreStatus.ASSIGNED,
+        assignedWorkerId: application.workerId,
+      },
+    })
+
+    // 2) Reject all other pending applications for this chore
+    await tx.application.updateMany({
+      where: {
+        choreId: application.choreId,
+        status: ApplicationStatus.PENDING,
+        NOT: { id: application.id },
+      },
+      data: { status: ApplicationStatus.REJECTED },
+    })
+
+    // 3) Mark this application as ACCEPTED
     const acceptedApplication = await tx.application.update({
-      where: { id: applicationId },
+      where: { id: application.id },
       data: { status: ApplicationStatus.ACCEPTED },
       include: {
         worker: {
@@ -192,75 +103,95 @@ export async function assignApplication(applicationId: string, customerId: strin
       },
     })
 
-    // Reject all other PENDING applications for this chore
-    await tx.application.updateMany({
-      where: {
-        choreId: chore.id,
-        status: ApplicationStatus.PENDING,
-        id: { not: applicationId },
-      },
-      data: { status: ApplicationStatus.REJECTED },
-    })
-
-    // Update the chore
-    const updatedChore = await tx.chore.update({
-      where: { id: chore.id },
-      data: {
-        status: ChoreStatus.ASSIGNED,
-        assignedWorkerId: application.workerId,
-      },
-      include: {
-        assignedWorker: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-        createdBy: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-      },
-    })
-
-    return { application: acceptedApplication, chore: updatedChore }
+    return {
+      chore: updatedChore,
+      application: acceptedApplication,
+    }
   })
 
   return result
 }
 
-/**
- * List applications for worker dashboard (simplified version)
- */
 export async function listApplicationsForWorkerDashboard(workerId: string) {
-  const applications = await prisma.application.findMany({
-    where: { workerId },
+  return prisma.application.findMany({
+    where: {
+      workerId,
+    },
     include: {
       chore: {
         select: {
           id: true,
           title: true,
           status: true,
-          type: true,
+          category: true,
           budget: true,
-          locationAddress: true,
-          createdBy: {
-            select: {
-              id: true,
-              name: true,
-            },
-          },
+          createdAt: true,
         },
       },
     },
     orderBy: {
       createdAt: 'desc',
     },
-    take: 10, // Limit for dashboard
-  })
-
-  return applications
+  });
 }
 
+// List applications for a specific chore (CUSTOMER-only, owner check)
+export async function listApplicationsForChore(
+  choreId: string,
+  customerId: string
+) {
+  // Ensure the chore exists and belongs to this customer
+  const chore = await prisma.chore.findUnique({
+    where: { id: choreId },
+    select: { createdById: true },
+  })
+
+  if (!chore) {
+    throw new Error('Chore not found')
+  }
+
+  if (chore.createdById !== customerId) {
+    throw new Error('You are not allowed to view applications for this chore')
+  }
+
+  // Return all applications for this chore with worker info
+  return prisma.application.findMany({
+    where: { choreId },
+    include: {
+      worker: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+        },
+      },
+    },
+    orderBy: {
+      createdAt: 'desc',
+    },
+  })
+}
+
+// List all applications for a worker (for "My Applications" page, etc.)
+export async function listApplicationsForWorker(workerId: string) {
+  return prisma.application.findMany({
+    where: {
+      workerId,
+    },
+    include: {
+      chore: {
+        select: {
+          id: true,
+          title: true,
+          status: true,
+          category: true,
+          budget: true,
+          createdAt: true,
+        },
+      },
+    },
+    orderBy: {
+      createdAt: 'desc',
+    },
+  })
+}
