@@ -1,6 +1,12 @@
 import { prisma } from '../db/client'
 import { ChoreStatus, ApplicationStatus } from '@prisma/client'
 import { getAverageRating } from './ratings'
+import {
+  getWorkerPaymentDashboard,
+  getCustomerPaymentDashboard,
+  WorkerPaymentDashboard,
+  CustomerPaymentDashboard,
+} from './payments'
 
 export interface WorkerDashboardData {
   stats: {
@@ -13,6 +19,8 @@ export interface WorkerDashboardData {
   assignedChores: any[]
   inProgressChores: any[]
   completedChores: any[]
+  cancelledChores: any[]
+  paymentDashboard: WorkerPaymentDashboard
 }
 
 export interface CustomerDashboardData {
@@ -26,6 +34,8 @@ export interface CustomerDashboardData {
   publishedChores: any[]
   activeChores: any[]
   completedChores: any[]
+  cancelledChores: any[]
+  paymentDashboard: CustomerPaymentDashboard
 }
 
 /**
@@ -33,12 +43,21 @@ export interface CustomerDashboardData {
  */
 export async function getWorkerDashboardData(workerId: string): Promise<WorkerDashboardData> {
   // Get all chores assigned to this worker in parallel
-  const [assignedChores, inProgressChores, completedChores, allCompletedChores] = await Promise.all([
-    // Assigned chores
+  const [
+    assignedChores,
+    inProgressChores,
+    completedChores,
+    allCompletedChores,
+    cancelledChores,
+    paymentDashboard,
+  ] = await Promise.all([
+    // Assigned chores (including cancellation requested that were originally ASSIGNED)
     prisma.chore.findMany({
       where: {
         assignedWorkerId: workerId,
-        status: ChoreStatus.ASSIGNED,
+        status: {
+          in: [ChoreStatus.ASSIGNED, 'CANCELLATION_REQUESTED' as ChoreStatus],
+        },
       },
       include: {
         createdBy: {
@@ -52,16 +71,23 @@ export async function getWorkerDashboardData(workerId: string): Promise<WorkerDa
             applications: true,
           },
         },
-      },
+        cancellationRequests: {
+          where: { status: 'PENDING' as any },
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+        },
+      } as any,
       orderBy: {
         createdAt: 'desc',
       },
     }),
-    // In progress chores
+    // In progress chores (including cancellation requested that were originally IN_PROGRESS)
     prisma.chore.findMany({
       where: {
         assignedWorkerId: workerId,
-        status: ChoreStatus.IN_PROGRESS,
+        status: {
+          in: [ChoreStatus.IN_PROGRESS, 'CANCELLATION_REQUESTED' as ChoreStatus],
+        },
       },
       include: {
         createdBy: {
@@ -75,7 +101,12 @@ export async function getWorkerDashboardData(workerId: string): Promise<WorkerDa
             applications: true,
           },
         },
-      },
+        cancellationRequests: {
+          where: { status: 'PENDING' as any },
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+        },
+      } as any,
       orderBy: {
         createdAt: 'desc',
       },
@@ -141,6 +172,48 @@ export async function getWorkerDashboardData(workerId: string): Promise<WorkerDa
         },
       },
     }),
+    // Cancelled chores
+    prisma.chore.findMany({
+      where: {
+        assignedWorkerId: workerId,
+        status: ChoreStatus.CANCELLED,
+      },
+      include: {
+        createdBy: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        ratings: {
+          where: {
+            toUserId: workerId,
+          },
+          include: {
+            fromUser: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+          },
+        },
+        applications: {
+          where: {
+            workerId: workerId,
+            status: ApplicationStatus.ACCEPTED,
+          },
+          select: {
+            bidAmount: true,
+          },
+        },
+      },
+      orderBy: {
+        updatedAt: 'desc',
+      },
+      }),
+    // Payment dashboard data
+    getWorkerPaymentDashboard(workerId),
   ])
 
   // Get rating stats
@@ -164,6 +237,25 @@ export async function getWorkerDashboardData(workerId: string): Promise<WorkerDa
     return sum + (chore.budget || 0)
   }, 0)
 
+  // Filter out CANCELLATION_REQUESTED from assignedChores if they were originally IN_PROGRESS
+  // and filter out CANCELLATION_REQUESTED from inProgressChores if they were originally ASSIGNED
+  // to avoid duplicates
+  const assignedChoresFiltered = assignedChores.filter((chore) => {
+    if (chore.status === ('CANCELLATION_REQUESTED' as ChoreStatus)) {
+      const request = (chore as any).cancellationRequests?.[0]
+      return request?.originalStatus === ChoreStatus.ASSIGNED || !request
+    }
+    return true
+  })
+
+  const inProgressChoresFiltered = inProgressChores.filter((chore) => {
+    if (chore.status === ('CANCELLATION_REQUESTED' as ChoreStatus)) {
+      const request = (chore as any).cancellationRequests?.[0]
+      return request?.originalStatus === ChoreStatus.IN_PROGRESS || !request
+    }
+    return true
+  })
+
   return {
     stats: {
       averageRating: ratingStats.average || 0,
@@ -172,9 +264,11 @@ export async function getWorkerDashboardData(workerId: string): Promise<WorkerDa
       totalEarnings,
       completedLast30Days,
     },
-    assignedChores,
-    inProgressChores,
+    assignedChores: assignedChoresFiltered,
+    inProgressChores: inProgressChoresFiltered,
     completedChores,
+    cancelledChores,
+    paymentDashboard,
   }
 }
 
@@ -185,8 +279,15 @@ export async function getCustomerDashboardData(
   customerId: string
 ): Promise<CustomerDashboardData> {
   // Get all chores created by this customer in parallel
-  const [draftChores, publishedChores, activeChores, completedChores, allChores] =
-    await Promise.all([
+  const [
+    draftChores,
+    publishedChores,
+    activeChores,
+    completedChores,
+    allChores,
+    cancelledChores,
+    paymentDashboard,
+  ] = await Promise.all([
       // Draft chores
       prisma.chore.findMany({
         where: {
@@ -221,12 +322,12 @@ export async function getCustomerDashboardData(
           createdAt: 'desc',
         },
       }),
-      // Active chores (ASSIGNED or IN_PROGRESS)
+      // Active chores (ASSIGNED, IN_PROGRESS, or CANCELLATION_REQUESTED)
       prisma.chore.findMany({
         where: {
           createdById: customerId,
           status: {
-            in: [ChoreStatus.ASSIGNED, ChoreStatus.IN_PROGRESS],
+            in: [ChoreStatus.ASSIGNED, ChoreStatus.IN_PROGRESS, 'CANCELLATION_REQUESTED' as ChoreStatus],
           },
         },
         include: {
@@ -304,7 +405,55 @@ export async function getCustomerDashboardData(
           },
         },
       }),
-    ])
+      // Cancelled chores
+      prisma.chore.findMany({
+        where: {
+          createdById: customerId,
+          status: ChoreStatus.CANCELLED,
+        },
+        include: {
+          assignedWorker: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+            },
+          },
+          createdBy: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+          ratings: {
+            where: {
+              fromUserId: customerId,
+            },
+            include: {
+              toUser: {
+                select: {
+                  id: true,
+                  name: true,
+                },
+              },
+            },
+          },
+          applications: {
+            where: {
+              status: ApplicationStatus.ACCEPTED,
+            },
+            select: {
+              bidAmount: true,
+            },
+          },
+        },
+        orderBy: {
+          updatedAt: 'desc',
+        },
+      }),
+    // Payment dashboard data
+    getCustomerPaymentDashboard(customerId),
+  ])
 
   // Get count of ratings given by this customer
   const ratingsGiven = await prisma.rating.count({
@@ -340,6 +489,8 @@ export async function getCustomerDashboardData(
     publishedChores,
     activeChores,
     completedChores,
+    cancelledChores,
+    paymentDashboard,
   }
 }
 

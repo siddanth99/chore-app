@@ -10,12 +10,41 @@ import Button from '@/components/ui/Button'
 import Badge from '@/components/ui/Badge'
 import Card from '@/components/ui/Card'
 
+interface PaymentSummary {
+  totalFromCustomer: number
+  totalToWorker: number
+  agreedPrice: number | null
+  paymentStatus: 'NONE' | 'CUSTOMER_PARTIAL' | 'CUSTOMER_PAID' | 'SETTLED'
+}
+
+interface Payment {
+  id: string
+  amount: number
+  direction: string
+  method: string
+  notes: string | null
+  createdAt: string
+  fromUser: {
+    id: string
+    name: string | null
+    email: string | null
+  }
+  toUser: {
+    id: string
+    name: string | null
+    email: string | null
+  }
+}
+
 interface ChoreDetailClientProps {
   chore: any
   currentUser: any
   initialApplications: any[] | null
   hasRated?: boolean
   assignedWorkerRating?: { average: number; count: number } | null
+  latestCancellationRequest?: any | null
+  payments?: Payment[] | null
+  paymentSummary?: PaymentSummary | null
 }
 
 export default function ChoreDetailClient({
@@ -24,12 +53,19 @@ export default function ChoreDetailClient({
   initialApplications,
   hasRated: initialHasRated = false,
   assignedWorkerRating = null,
+  latestCancellationRequest: initialLatestCancellationRequest = null,
+  payments: initialPayments = null,
+  paymentSummary: initialPaymentSummary = null,
 }: ChoreDetailClientProps) {
   const router = useRouter()
   const [applications, setApplications] = useState(initialApplications || [])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+  const [latestCancellationRequest, setLatestCancellationRequest] = useState(
+    initialLatestCancellationRequest
+  )
+  const [choreStatus, setChoreStatus] = useState<string>(chore.status)
 
   // Application form state (for workers)
   const [bidAmount, setBidAmount] = useState('')
@@ -45,21 +81,55 @@ export default function ChoreDetailClient({
   const [choreRating, setChoreRating] = useState<any>(null)
   const [loadingRatings, setLoadingRatings] = useState(false)
 
+  // Payment form state
+  const [payAmount, setPayAmount] = useState('')
+  const [payDirection, setPayDirection] = useState<'CUSTOMER_TO_OWNER' | 'OWNER_TO_WORKER'>(
+    'CUSTOMER_TO_OWNER'
+  )
+  const [payMethod, setPayMethod] = useState<'CASH' | 'UPI' | 'BANK_TRANSFER' | 'CARD' | 'OTHER'>(
+    'CASH'
+  )
+  const [payNotes, setPayNotes] = useState('')
+  const [paySubmitting, setPaySubmitting] = useState(false)
+  const [payError, setPayError] = useState('')
+
   const isOwner =
     currentUser && currentUser.role === 'CUSTOMER' && chore.createdById === currentUser.id
   const isWorker = currentUser && currentUser.role === 'WORKER'
   const isAssignedWorker = currentUser && chore.assignedWorkerId === currentUser.id
+  const canViewPayments = isOwner || isAssignedWorker
+  const canAddPayments =
+    isOwner &&
+    (choreStatus === 'ASSIGNED' ||
+      choreStatus === 'IN_PROGRESS' ||
+      choreStatus === 'COMPLETED')
+
+  // Find worker's application if they're a worker
+  const workerApplication = isWorker
+    ? applications?.find((app) => app.workerId === currentUser?.id)
+    : null
+
+  const hasApplied = !!workerApplication
+  const isAssignedToSomeoneElse =
+    !!chore.assignedWorkerId && chore.assignedWorkerId !== currentUser?.id
 
   // Worker can apply only if:
   // - logged in
   // - role = WORKER
   // - chore is PUBLISHED
   // - no worker assigned yet
+  // - worker hasn't already applied
   const canApply =
-    !!currentUser &&
-    currentUser.role === 'WORKER' &&
-    chore.status === 'PUBLISHED' &&
-    !chore.assignedWorkerId
+    isWorker &&
+    choreStatus === 'PUBLISHED' &&
+    !chore.assignedWorkerId &&
+    !hasApplied
+
+  // Sync chore status when chore prop changes
+  useEffect(() => {
+    setChoreStatus(chore.status)
+    setLatestCancellationRequest(initialLatestCancellationRequest)
+  }, [chore.status, initialLatestCancellationRequest])
 
   // Load ratings on mount
   useEffect(() => {
@@ -112,6 +182,11 @@ export default function ChoreDetailClient({
         return
       }
 
+      // Add the new application to the list if it exists
+      if (data.application) {
+        setApplications((prev) => (prev ? [...prev, data.application] : [data.application]))
+      }
+      
       setSuccess('Application submitted successfully!')
       setBidAmount('')
       setMessage('')
@@ -195,11 +270,58 @@ export default function ChoreDetailClient({
           ? 'Chore marked as in progress!'
           : 'Chore marked as completed!',
       )
+      if (data.chore) {
+        setChoreStatus(data.chore.status)
+      }
       router.refresh()
     } catch (err) {
       setError('An error occurred. Please try again.')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleAddPayment = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setPayError('')
+    setPaySubmitting(true)
+
+    try {
+      const amountNumber = parseFloat(payAmount)
+      if (!amountNumber || amountNumber <= 0) {
+        setPayError('Enter a valid amount')
+        setPaySubmitting(false)
+        return
+      }
+
+      const res = await fetch(`/api/chores/${chore.id}/payments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          amount: amountNumber,
+          direction: payDirection,
+          method: payMethod,
+          notes: payNotes || undefined,
+        }),
+      })
+
+      const data = await res.json()
+      if (!res.ok) {
+        setPayError(data.error || 'Failed to record payment')
+        setPaySubmitting(false)
+        return
+      }
+
+      // Clear form
+      setPayAmount('')
+      setPayNotes('')
+
+      // Refresh payments from server
+      router.refresh()
+    } catch (err) {
+      setPayError('An error occurred while recording payment')
+    } finally {
+      setPaySubmitting(false)
     }
   }
 
@@ -254,7 +376,112 @@ export default function ChoreDetailClient({
     }
   }
 
-  const getStatusBadgeVariant = (status: ChoreStatus): 'statusDraft' | 'statusPublished' | 'statusAssigned' | 'statusInProgress' | 'statusCompleted' | 'statusCancelled' => {
+  const handleDirectCancel = async () => {
+    const reason = prompt('Why are you cancelling this chore? (optional)')
+    if (reason === null) return // User cancelled prompt
+
+    setLoading(true)
+    setError('')
+    setSuccess('')
+
+    try {
+      const response = await fetch(`/api/chores/${chore.id}/cancel`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ reason: reason || undefined }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        setError(data.error || 'Failed to cancel chore')
+        return
+      }
+
+      setSuccess('Chore cancelled successfully')
+      setChoreStatus('CANCELLED')
+      router.refresh()
+    } catch (err: any) {
+      setError('An error occurred. Please try again.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleRequestCancellation = async () => {
+    const reason = prompt('Why do you want to cancel? (optional)')
+    if (reason === null) return // User cancelled prompt
+
+    setLoading(true)
+    setError('')
+    setSuccess('')
+
+    try {
+      const response = await fetch(`/api/chores/${chore.id}/cancel-request`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ reason: reason || undefined }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        setError(data.error || 'Failed to request cancellation')
+        return
+      }
+
+      setSuccess('Cancellation request submitted')
+      setChoreStatus('CANCELLATION_REQUESTED')
+      setLatestCancellationRequest(data.cancellationRequest)
+      router.refresh()
+    } catch (err: any) {
+      setError('An error occurred. Please try again.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleCancellationDecision = async (decision: 'APPROVE' | 'REJECT') => {
+    setLoading(true)
+    setError('')
+    setSuccess('')
+
+    try {
+      const response = await fetch(`/api/chores/${chore.id}/cancel-decision`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ decision }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        setError(data.error || `Failed to ${decision.toLowerCase()} cancellation`)
+        return
+      }
+
+      setSuccess(
+        decision === 'APPROVE'
+          ? 'Cancellation approved. Chore is now cancelled.'
+          : 'Cancellation request rejected. Chore status restored.'
+      )
+      setChoreStatus(data.chore.status)
+      setLatestCancellationRequest(null)
+      router.refresh()
+    } catch (err: any) {
+      setError('An error occurred. Please try again.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const getStatusBadgeVariant = (status: string): 'statusDraft' | 'statusPublished' | 'statusAssigned' | 'statusInProgress' | 'statusCompleted' | 'statusCancelled' => {
     switch (status) {
       case 'DRAFT':
         return 'statusDraft'
@@ -268,6 +495,8 @@ export default function ChoreDetailClient({
         return 'statusCompleted'
       case 'CANCELLED':
         return 'statusCancelled'
+      case 'CANCELLATION_REQUESTED':
+        return 'statusCancelled' // Use cancelled style for now
       default:
         return 'statusDraft'
     }
@@ -289,7 +518,7 @@ export default function ChoreDetailClient({
       <div className="mx-auto max-w-4xl">
         {/* Status debug line */}
         <div className="mb-2 text-xs text-slate-500 dark:text-slate-400">
-          Status: {chore.status} | You are: {currentUser?.role ?? 'Guest'}
+          Status: {choreStatus} | You are: {currentUser?.role ?? 'Guest'}
         </div>
 
         {/* Back link */}
@@ -299,6 +528,20 @@ export default function ChoreDetailClient({
         >
           ← Back to Chores
         </Link>
+
+        {/* Cancelled Banner */}
+        {choreStatus === 'CANCELLED' && (
+          <Card className="mb-6 border-2 border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20">
+            <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-50 mb-2">
+              This chore has been cancelled.
+            </h2>
+            {latestCancellationRequest?.reason && (
+              <p className="text-sm text-slate-700 dark:text-slate-300">
+                Reason: {latestCancellationRequest.reason}
+              </p>
+            )}
+          </Card>
+        )}
 
         {/* Chore details */}
         <Card className="mb-6">
@@ -314,14 +557,39 @@ export default function ChoreDetailClient({
           )}
           
           <div className="mb-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-            <h1 className="text-3xl font-bold text-slate-900 dark:text-slate-50">{chore.title}</h1>
-            <div className="flex gap-2">
-              <Badge variant={getTypeBadgeVariant(chore.type)}>
-                {chore.type}
-              </Badge>
-              <Badge variant={getStatusBadgeVariant(chore.status)}>
-                {chore.status.replace('_', ' ')}
-              </Badge>
+            <div className="flex-1">
+              <h1 className="text-3xl font-bold text-slate-900 dark:text-slate-50">{chore.title}</h1>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="flex gap-2">
+                <Badge variant={getTypeBadgeVariant(chore.type)}>
+                  {chore.type}
+                </Badge>
+                <Badge variant={getStatusBadgeVariant(choreStatus)}>
+                  {choreStatus.replace('_', ' ')}
+                </Badge>
+              </div>
+              {isOwner &&
+                choreStatus !== 'COMPLETED' &&
+                choreStatus !== 'CANCELLED' &&
+                choreStatus !== 'CANCELLATION_REQUESTED' && (
+                  <Link href={`/chores/${chore.id}/edit`}>
+                    <Button variant="secondary" size="sm">
+                      Edit
+                    </Button>
+                  </Link>
+                )}
+              {isOwner &&
+                (choreStatus === 'DRAFT' || choreStatus === 'PUBLISHED') && (
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    onClick={handleDirectCancel}
+                    disabled={loading}
+                  >
+                    Cancel Chore
+                  </Button>
+                )}
             </div>
           </div>
 
@@ -436,12 +704,44 @@ export default function ChoreDetailClient({
           </div>
         )}
 
+        {/* Worker: Assigned to this worker */}
+        {isAssignedWorker && (
+          <Card className="mb-6 border-2 border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/20">
+            <p className="text-sm text-slate-700 dark:text-slate-300">
+              You are assigned to this chore.
+            </p>
+          </Card>
+        )}
+
+        {/* Worker: Assigned to someone else - hide apply UI */}
+        {isWorker && isAssignedToSomeoneElse && (
+          <Card className="mb-6 border-2 border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900/20">
+            <p className="text-sm text-slate-700 dark:text-slate-300">
+              This chore has been assigned to another worker.
+            </p>
+          </Card>
+        )}
+
+        {/* Worker: Already applied */}
+        {isWorker && hasApplied && !isAssignedWorker && (
+          <Card className="mb-6 border-2 border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20">
+            <Button
+              variant="secondary"
+              size="md"
+              disabled
+              className="w-full sm:w-auto"
+            >
+              Applied (View Application)
+            </Button>
+          </Card>
+        )}
+
         {/* Worker: Prominent Apply Now button */}
         {canApply && (
           <Card className="mb-6 border-2 border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20">
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
               <div>
-                <h3 className="mb-2 text-lg font-semibold text-slate-800 dark:text-slate-100">
+                <h3 className="mb-2 text-lg font-semibold text-slate-900 dark:text-slate-50">
                   Interested in this chore?
                 </h3>
                 <p className="text-sm text-slate-700 dark:text-slate-300">
@@ -533,24 +833,28 @@ export default function ChoreDetailClient({
                           <h3 className="font-medium text-slate-900 dark:text-slate-50">
                             {app.worker.name}
                           </h3>
-                          {app.workerRating && app.workerRating.count > 0 && (
+                          {(app.workerRating || app.workerAverageRating) && (
                             <div className="flex items-center gap-1">
                               <div className="flex items-center">
-                                {[1, 2, 3, 4, 5].map((star) => (
-                                  <span
-                                    key={star}
-                                    className={`text-xs ${
-                                      star <= Math.round(app.workerRating.average)
-                                        ? 'text-yellow-400'
-                                        : 'text-slate-400 dark:text-slate-600'
-                                    }`}
-                                  >
-                                    ★
-                                  </span>
-                                ))}
+                                {[1, 2, 3, 4, 5].map((star) => {
+                                  const rating = app.workerRating?.average || app.workerAverageRating || 0
+                                  return (
+                                    <span
+                                      key={star}
+                                      className={`text-xs ${
+                                        star <= Math.round(rating)
+                                          ? 'text-yellow-400'
+                                          : 'text-slate-400 dark:text-slate-600'
+                                      }`}
+                                    >
+                                      ★
+                                    </span>
+                                  )
+                                })}
                               </div>
                               <span className="text-xs text-slate-500 dark:text-slate-400">
-                                {app.workerRating.average.toFixed(1)} ({app.workerRating.count})
+                                {((app.workerRating?.average || app.workerAverageRating) || 0).toFixed(1)} / 5
+                                {(app.workerRating?.count || app.workerRatingCount) ? ` (${app.workerRating?.count || app.workerRatingCount} reviews)` : ''}
                               </span>
                             </div>
                           )}
@@ -582,7 +886,7 @@ export default function ChoreDetailClient({
                     <p className="text-xs text-slate-500 dark:text-slate-400">
                       Applied on {new Date(app.createdAt).toLocaleDateString()}
                     </p>
-                    {app.status === 'PENDING' && chore.status === 'PUBLISHED' && (
+                    {app.status === 'PENDING' && choreStatus === 'PUBLISHED' && (
                       <Button
                         onClick={() => handleAssign(app.id)}
                         disabled={loading}
@@ -613,14 +917,59 @@ export default function ChoreDetailClient({
           </Card>
         )}
 
+        {/* Customer: Cancellation Request Decision */}
+        {isOwner &&
+          choreStatus === 'CANCELLATION_REQUESTED' &&
+          latestCancellationRequest && (
+            <Card className="mb-6 border-2 border-yellow-200 dark:border-yellow-800 bg-yellow-50 dark:bg-yellow-900/20">
+              <h2 className="mb-4 text-xl font-semibold text-slate-900 dark:text-slate-50">
+                Cancellation Requested
+              </h2>
+              <div className="space-y-4">
+                <div>
+                  <p className="text-sm text-slate-700 dark:text-slate-300 mb-2">
+                    <span className="font-medium">Worker:</span>{' '}
+                    {latestCancellationRequest.requestedBy?.name || 'Unknown'}
+                  </p>
+                  {latestCancellationRequest.reason ? (
+                    <p className="text-sm text-slate-700 dark:text-slate-300">
+                      <span className="font-medium">Reason:</span>{' '}
+                      {latestCancellationRequest.reason}
+                    </p>
+                  ) : (
+                    <p className="text-sm text-slate-500 dark:text-slate-400">
+                      No reason provided
+                    </p>
+                  )}
+                </div>
+                <div className="flex gap-3">
+                  <Button
+                    onClick={() => handleCancellationDecision('APPROVE')}
+                    disabled={loading}
+                    variant="danger"
+                  >
+                    {loading ? 'Processing...' : 'Approve Cancellation'}
+                  </Button>
+                  <Button
+                    onClick={() => handleCancellationDecision('REJECT')}
+                    disabled={loading}
+                    variant="secondary"
+                  >
+                    {loading ? 'Processing...' : 'Reject Request'}
+                  </Button>
+                </div>
+              </div>
+            </Card>
+          )}
+
         {/* Assigned Worker: Status update buttons */}
         {isAssignedWorker && (
           <Card className="mb-6">
-            <h2 className="mb-4 text-xl font-semibold text-slate-800 dark:text-slate-100">
+            <h2 className="mb-4 text-xl font-semibold text-slate-900 dark:text-slate-50">
               Update Status
             </h2>
             <div className="flex gap-3">
-              {chore.status === 'ASSIGNED' && (
+              {choreStatus === 'ASSIGNED' && (
                 <Button
                   onClick={() => handleStatusUpdate('start')}
                   disabled={loading}
@@ -630,7 +979,7 @@ export default function ChoreDetailClient({
                   {loading ? 'Updating...' : 'Start Chore'}
                 </Button>
               )}
-              {chore.status === 'IN_PROGRESS' && (
+              {choreStatus === 'IN_PROGRESS' && (
                 <Button
                   onClick={() => handleStatusUpdate('complete')}
                   disabled={loading}
@@ -643,6 +992,43 @@ export default function ChoreDetailClient({
             </div>
           </Card>
         )}
+
+        {/* Worker: Request Cancellation */}
+        {isAssignedWorker &&
+          (choreStatus === 'ASSIGNED' || choreStatus === 'IN_PROGRESS') &&
+          !latestCancellationRequest && (
+            <Card className="mb-6">
+              <h2 className="mb-4 text-xl font-semibold text-slate-900 dark:text-slate-50">
+                Request Cancellation
+              </h2>
+              <p className="mb-4 text-sm text-slate-700 dark:text-slate-300">
+                If you need to cancel this chore, you can request cancellation. The customer will
+                need to approve or reject your request.
+              </p>
+              <Button
+                onClick={handleRequestCancellation}
+                disabled={loading}
+                variant="danger"
+              >
+                {loading ? 'Submitting...' : 'Request Cancellation'}
+              </Button>
+            </Card>
+          )}
+
+        {/* Worker: Cancellation Requested Status */}
+        {isAssignedWorker &&
+          choreStatus === 'CANCELLATION_REQUESTED' &&
+          latestCancellationRequest &&
+          latestCancellationRequest.requestedById === currentUser?.id && (
+            <Card className="mb-6 border-2 border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20">
+              <h2 className="mb-2 text-xl font-semibold text-slate-900 dark:text-slate-50">
+                Cancellation Requested
+              </h2>
+              <p className="text-sm text-slate-700 dark:text-slate-300">
+                You have requested cancellation. Waiting for customer&apos;s decision.
+              </p>
+            </Card>
+          )}
 
         {/* Rating for this chore - Read-only card visible to all users */}
         {choreRating && (
@@ -682,7 +1068,7 @@ export default function ChoreDetailClient({
         {currentUser &&
           currentUser.role === 'CUSTOMER' &&
           isOwner &&
-          chore.status === 'COMPLETED' &&
+          choreStatus === 'COMPLETED' &&
           !hasRated && (
             <Card className="mb-6">
               <h2 className="mb-4 text-xl font-semibold text-slate-800 dark:text-slate-100">
@@ -741,25 +1127,236 @@ export default function ChoreDetailClient({
           )}
 
         {/* Rating info message - show when COMPLETED but user is not customer */}
-        {chore.status === 'COMPLETED' &&
+        {choreStatus === 'COMPLETED' &&
           currentUser &&
           currentUser.role !== 'CUSTOMER' &&
           !isOwner && (
             <Card className="mb-6">
-              <h2 className="mb-2 text-xl font-semibold text-slate-800 dark:text-slate-100">Rating</h2>
-              <p className="text-sm text-slate-500 dark:text-slate-400">
+              <h2 className="mb-2 text-xl font-semibold text-slate-900 dark:text-slate-50">Rating</h2>
+              <p className="text-sm text-slate-700 dark:text-slate-300">
                 Only the customer can rate this chore.
               </p>
             </Card>
           )}
 
+        {/* Payments & Earnings Section */}
+        {canViewPayments && initialPaymentSummary && (
+          <Card className="mb-6">
+            {/* Header */}
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-50">
+                  Payments & Earnings
+                </h2>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Internal record of payments related to this chore.
+                </p>
+              </div>
+
+              {/* Payment status badge */}
+              <Badge
+                variant={
+                  initialPaymentSummary.paymentStatus === 'NONE'
+                    ? 'statusDraft'
+                    : initialPaymentSummary.paymentStatus === 'CUSTOMER_PARTIAL'
+                    ? 'statusInProgress'
+                    : initialPaymentSummary.paymentStatus === 'CUSTOMER_PAID'
+                    ? 'statusPublished'
+                    : 'statusCompleted'
+                }
+              >
+                {initialPaymentSummary.paymentStatus.replace('_', ' ')}
+              </Badge>
+            </div>
+
+            {/* Summary row */}
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3 text-sm">
+              <div>
+                <p className="text-slate-500 dark:text-slate-400">Agreed Price</p>
+                <p className="text-base font-semibold text-slate-900 dark:text-slate-50">
+                  {initialPaymentSummary.agreedPrice != null
+                    ? `$${initialPaymentSummary.agreedPrice}`
+                    : 'Not set'}
+                </p>
+              </div>
+              <div>
+                <p className="text-slate-500 dark:text-slate-400">From Customer</p>
+                <p className="text-base font-semibold text-slate-900 dark:text-slate-50">
+                  ${initialPaymentSummary.totalFromCustomer}
+                  {initialPaymentSummary.agreedPrice
+                    ? ` / $${initialPaymentSummary.agreedPrice}`
+                    : ''}
+                </p>
+              </div>
+              <div>
+                <p className="text-slate-500 dark:text-slate-400">To Worker</p>
+                <p className="text-base font-semibold text-slate-900 dark:text-slate-50">
+                  ${initialPaymentSummary.totalToWorker}
+                </p>
+              </div>
+            </div>
+
+            {/* Add Payment Form */}
+            {canAddPayments && (
+              <div className="mt-6 border-t border-slate-200 pt-6 dark:border-slate-700">
+                <h3 className="mb-3 text-sm font-semibold text-slate-800 dark:text-slate-100">
+                  Add Internal Payment
+                </h3>
+                {payError && (
+                  <div className="mb-3 rounded-md bg-red-50 px-3 py-2 text-xs text-red-700 dark:bg-red-900/20 dark:text-red-300">
+                    {payError}
+                  </div>
+                )}
+
+                <form onSubmit={handleAddPayment} className="grid gap-3 md:grid-cols-4">
+                  {/* Amount */}
+                  <div className="md:col-span-1">
+                    <label className="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-300">
+                      Amount
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={payAmount}
+                      onChange={(e) => setPayAmount(e.target.value)}
+                      className="block w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                      required
+                    />
+                  </div>
+
+                  {/* Direction */}
+                  <div className="md:col-span-1">
+                    <label className="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-300">
+                      Direction
+                    </label>
+                    <select
+                      value={payDirection}
+                      onChange={(e) =>
+                        setPayDirection(
+                          e.target.value as 'CUSTOMER_TO_OWNER' | 'OWNER_TO_WORKER'
+                        )
+                      }
+                      className="block w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                    >
+                      <option value="CUSTOMER_TO_OWNER">Customer → Owner</option>
+                      <option value="OWNER_TO_WORKER">Owner → Worker</option>
+                    </select>
+                  </div>
+
+                  {/* Method */}
+                  <div className="md:col-span-1">
+                    <label className="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-300">
+                      Method
+                    </label>
+                    <select
+                      value={payMethod}
+                      onChange={(e) =>
+                        setPayMethod(
+                          e.target.value as 'CASH' | 'UPI' | 'BANK_TRANSFER' | 'CARD' | 'OTHER'
+                        )
+                      }
+                      className="block w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                    >
+                      <option value="CASH">Cash</option>
+                      <option value="UPI">UPI</option>
+                      <option value="BANK_TRANSFER">Bank Transfer</option>
+                      <option value="CARD">Card</option>
+                      <option value="OTHER">Other</option>
+                    </select>
+                  </div>
+
+                  {/* Notes + Submit */}
+                  <div className="md:col-span-1 flex flex-col gap-2">
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-300">
+                        Notes (optional)
+                      </label>
+                      <input
+                        type="text"
+                        value={payNotes}
+                        onChange={(e) => setPayNotes(e.target.value)}
+                        className="block w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                        placeholder="e.g. Advance, balance, cash at site"
+                      />
+                    </div>
+                    <button
+                      type="submit"
+                      disabled={paySubmitting}
+                      className="inline-flex items-center justify-center rounded-md bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-blue-500 disabled:opacity-50"
+                    >
+                      {paySubmitting ? 'Saving…' : 'Record Payment'}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            )}
+
+            {/* Payment list */}
+            <div className="mt-6">
+              <h3 className="mb-2 text-sm font-medium text-slate-800 dark:text-slate-100">
+                Payment History
+              </h3>
+
+              {(!initialPayments || initialPayments.length === 0) ? (
+                <p className="text-sm text-slate-500 dark:text-slate-400">
+                  No payments recorded yet for this chore.
+                </p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="min-w-full text-left text-sm">
+                    <thead className="border-b border-slate-200 dark:border-slate-700 text-xs uppercase text-slate-500 dark:text-slate-400">
+                      <tr>
+                        <th className="py-2 pr-4">Date</th>
+                        <th className="py-2 pr-4">From</th>
+                        <th className="py-2 pr-4">To</th>
+                        <th className="py-2 pr-4">Amount</th>
+                        <th className="py-2 pr-4">Direction</th>
+                        <th className="py-2 pr-4">Method</th>
+                        <th className="py-2 pr-4">Notes</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                      {initialPayments.map((p) => (
+                        <tr key={p.id}>
+                          <td className="py-2 pr-4 text-slate-700 dark:text-slate-300">
+                            {new Date(p.createdAt).toLocaleString()}
+                          </td>
+                          <td className="py-2 pr-4 text-slate-700 dark:text-slate-300">
+                            {p.fromUser?.name || p.fromUser?.email || 'Unknown'}
+                          </td>
+                          <td className="py-2 pr-4 text-slate-700 dark:text-slate-300">
+                            {p.toUser?.name || p.toUser?.email || 'Unknown'}
+                          </td>
+                          <td className="py-2 pr-4 text-slate-900 dark:text-slate-50 font-semibold">
+                            ${p.amount}
+                          </td>
+                          <td className="py-2 pr-4 text-slate-700 dark:text-slate-300">
+                            {p.direction.replace(/_/g, ' → ')}
+                          </td>
+                          <td className="py-2 pr-4 text-slate-700 dark:text-slate-300">
+                            {p.method.replace(/_/g, ' ')}
+                          </td>
+                          <td className="py-2 pr-4 text-slate-500 dark:text-slate-400">
+                            {p.notes || '—'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </Card>
+        )}
+
         {/* Chat - Only visible when assigned and status allows */}
         {currentUser &&
           (isOwner || isAssignedWorker) &&
           chore.assignedWorkerId &&
-          (chore.status === 'ASSIGNED' ||
-            chore.status === 'IN_PROGRESS' ||
-            chore.status === 'COMPLETED') && (
+          (choreStatus === 'ASSIGNED' ||
+            choreStatus === 'IN_PROGRESS' ||
+            choreStatus === 'COMPLETED') && (
             <Card className="mb-6">
               <h2 className="mb-4 text-xl font-semibold text-slate-800 dark:text-slate-100">Chat</h2>
               <ChoreChat choreId={chore.id} currentUserId={currentUser.id} />
@@ -770,9 +1367,9 @@ export default function ChoreDetailClient({
         {currentUser &&
           (isOwner || isAssignedWorker) &&
           (!chore.assignedWorkerId ||
-            (chore.status !== 'ASSIGNED' &&
-              chore.status !== 'IN_PROGRESS' &&
-              chore.status !== 'COMPLETED')) && (
+            (choreStatus !== 'ASSIGNED' &&
+              choreStatus !== 'IN_PROGRESS' &&
+              choreStatus !== 'COMPLETED')) && (
             <Card className="mb-6">
               <h2 className="mb-2 text-xl font-semibold text-slate-800 dark:text-slate-100">Chat</h2>
               <p className="text-sm text-slate-500 dark:text-slate-400">

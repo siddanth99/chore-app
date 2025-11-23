@@ -1,6 +1,7 @@
 // web/server/api/applications.ts
 import { prisma } from '../db/client'
-import { ApplicationStatus, ChoreStatus } from '@prisma/client'
+import { ApplicationStatus, ChoreStatus, NotificationType } from '@prisma/client'
+import { createNotification } from './notifications'
 
 export interface CreateApplicationInput {
   choreId: string
@@ -13,6 +14,14 @@ export async function createApplication(input: CreateApplicationInput) {
   // Validate chore exists and is PUBLISHED
   const chore = await prisma.chore.findUnique({
     where: { id: input.choreId },
+    include: {
+      createdBy: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+    },
   })
 
   if (!chore) {
@@ -23,6 +32,24 @@ export async function createApplication(input: CreateApplicationInput) {
     throw new Error('Chore is not available for applications')
   }
 
+  // Check if worker has already applied to this chore
+  const existing = await prisma.application.findFirst({
+    where: {
+      choreId: input.choreId,
+      workerId: input.workerId,
+    },
+  })
+
+  if (existing) {
+    throw new Error('You have already applied to this chore.')
+  }
+
+  // Get worker info for notification
+  const worker = await prisma.user.findUnique({
+    where: { id: input.workerId },
+    select: { name: true },
+  })
+
   // Create the application
   const application = await prisma.application.create({
     data: {
@@ -32,6 +59,17 @@ export async function createApplication(input: CreateApplicationInput) {
       message: input.message ?? null,
       status: ApplicationStatus.PENDING,
     },
+  })
+
+  // Notify the chore owner
+  await createNotification({
+    userId: chore.createdById,
+    type: NotificationType.APPLICATION_SUBMITTED,
+    choreId: chore.id,
+    applicationId: application.id,
+    title: 'New application received',
+    message: `${worker?.name || 'A worker'} applied to your chore "${chore.title}"`,
+    link: `/chores/${chore.id}`,
   })
 
   return application
@@ -109,6 +147,46 @@ export async function assignApplication(
     }
   })
 
+  // Notify the assigned worker
+  await createNotification({
+    userId: application.workerId,
+    type: NotificationType.CHORE_ASSIGNED,
+    choreId: application.choreId,
+    applicationId: application.id,
+    title: "You've been assigned a chore",
+    message: `You've been assigned to "${application.chore.title}"`,
+    link: `/chores/${application.choreId}`,
+  })
+
+  // Notify rejected workers (optional - can be done in batch)
+  const rejectedApplications = await prisma.application.findMany({
+    where: {
+      choreId: application.choreId,
+      status: ApplicationStatus.REJECTED,
+      NOT: { id: application.id },
+    },
+    include: {
+      worker: {
+        select: {
+          id: true,
+        },
+      },
+    },
+  })
+
+  // Notify each rejected worker
+  for (const rejectedApp of rejectedApplications) {
+    await createNotification({
+      userId: rejectedApp.workerId,
+      type: NotificationType.APPLICATION_REJECTED,
+      choreId: application.choreId,
+      applicationId: rejectedApp.id,
+      title: 'Application not selected',
+      message: `Your application for "${application.chore.title}" was not selected`,
+      link: `/chores/${application.choreId}`,
+    })
+  }
+
   return result
 }
 
@@ -155,7 +233,7 @@ export async function listApplicationsForChore(
   }
 
   // Return all applications for this chore with worker info
-  return prisma.application.findMany({
+  const applications = await prisma.application.findMany({
     where: { choreId },
     include: {
       worker: {
@@ -170,6 +248,21 @@ export async function listApplicationsForChore(
       createdAt: 'desc',
     },
   })
+
+  // Fetch worker ratings for each application
+  const { getAverageRating } = await import('./ratings')
+  const applicationsWithRatings = await Promise.all(
+    applications.map(async (app) => {
+      const rating = await getAverageRating(app.workerId)
+      return {
+        ...app,
+        workerAverageRating: rating.average,
+        workerRatingCount: rating.count,
+      }
+    })
+  )
+
+  return applicationsWithRatings
 }
 
 // List all applications for a worker (for "My Applications" page, etc.)

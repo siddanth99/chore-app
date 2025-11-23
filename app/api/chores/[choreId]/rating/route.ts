@@ -5,6 +5,9 @@ import {
   getRatingForChore,
 } from '@/server/api/ratings'
 import { requireAuth } from '@/server/auth/role'
+import { createNotification } from '@/server/api/notifications'
+import { NotificationType } from '@prisma/client'
+import { prisma } from '@/server/db/client'
 
 /**
  * GET /api/chores/[choreId]/rating - Get rating for this chore
@@ -52,6 +55,16 @@ export async function POST(
       )
     }
 
+    // Get chore info for notification
+    const chore = await prisma.chore.findUnique({
+      where: { id: choreId },
+      select: {
+        id: true,
+        title: true,
+        assignedWorkerId: true,
+      },
+    })
+
     // Call the ratings service
     const rating = await addRating({
       choreId,
@@ -59,6 +72,18 @@ export async function POST(
       score,
       comment,
     })
+
+    // Notify the worker if they're assigned
+    if (chore && chore.assignedWorkerId) {
+      await createNotification({
+        userId: chore.assignedWorkerId,
+        type: NotificationType.RATING_RECEIVED,
+        choreId: chore.id,
+        title: 'New rating received',
+        message: `You received a ${score}/5 rating for "${chore.title}"`,
+        link: `/chores/${chore.id}`,
+      })
+    }
 
     return NextResponse.json({ rating }, { status: 201 })
   } catch (error: any) {

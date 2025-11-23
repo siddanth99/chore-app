@@ -24,13 +24,17 @@ model User {
   updatedAt      DateTime @updatedAt
 
   // Relations
-  createdChores    Chore[]       @relation("ChoreCreator")
-  assignedChores   Chore[]       @relation("ChoreWorker")
-  applications     Application[]
-  ratingsGiven     Rating[]      @relation("RatingFrom")
-  ratingsReceived  Rating[]      @relation("RatingTo")
-  sentMessages     ChatMessage[] @relation("MessageFrom")
-  receivedMessages ChatMessage[] @relation("MessageTo")
+  createdChores         Chore[]                @relation("ChoreCreator")
+  assignedChores        Chore[]                @relation("ChoreWorker")
+  applications          Application[]
+  ratingsGiven          Rating[]               @relation("RatingFrom")
+  ratingsReceived       Rating[]               @relation("RatingTo")
+  sentMessages          ChatMessage[]          @relation("MessageFrom")
+  receivedMessages      ChatMessage[]          @relation("MessageTo")
+  cancellationRequests  CancellationRequest[]
+  paymentsFrom          Payment[]              @relation("PaymentFrom")
+  paymentsTo            Payment[]              @relation("PaymentTo")
+  notifications         Notification[]
 
   // NextAuth relations
   accounts Account[]
@@ -54,6 +58,8 @@ model Chore {
   status           ChoreStatus @default(DRAFT)
   category         String
   budget           Int?
+  agreedPrice      Int?
+  paymentStatus    ChorePaymentStatus @default(NONE)
   imageUrl         String?
   locationAddress  String?
   locationLat      Float?
@@ -65,11 +71,14 @@ model Chore {
   updatedAt        DateTime    @updatedAt
 
   // Relations
-  createdBy      User          @relation("ChoreCreator", fields: [createdById], references: [id], onDelete: Cascade)
-  assignedWorker User?         @relation("ChoreWorker", fields: [assignedWorkerId], references: [id])
-  applications   Application[]
-  ratings        Rating[]
-  messages       ChatMessage[]
+  createdBy            User                 @relation("ChoreCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  assignedWorker       User?                @relation("ChoreWorker", fields: [assignedWorkerId], references: [id])
+  applications         Application[]
+  ratings              Rating[]
+  messages             ChatMessage[]
+  cancellationRequests CancellationRequest[]
+  payments             Payment[]
+  notifications        Notification[]
 
   @@map("chores")
 }
@@ -85,6 +94,7 @@ enum ChoreStatus {
   ASSIGNED
   IN_PROGRESS
   COMPLETED
+  CANCELLATION_REQUESTED
   CANCELLED
 }
 
@@ -102,6 +112,7 @@ model Application {
   // Relations
   chore  Chore @relation(fields: [choreId], references: [id], onDelete: Cascade)
   worker User  @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  notifications Notification[]
 
   @@unique([choreId, workerId])
   @@map("applications")
@@ -188,4 +199,102 @@ model VerificationToken {
 
   @@unique([identifier, token])
   @@map("verification_tokens")
+}
+
+enum CancellationRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum PaymentDirection {
+  CUSTOMER_TO_OWNER
+  OWNER_TO_WORKER
+}
+
+enum PaymentMethod {
+  CASH
+  UPI
+  BANK_TRANSFER
+  CARD
+  OTHER
+}
+
+enum ChorePaymentStatus {
+  NONE
+  CUSTOMER_PARTIAL
+  CUSTOMER_PAID
+  SETTLED
+}
+
+model CancellationRequest {
+  id             String                     @id @default(cuid())
+  choreId        String
+  requestedById  String
+  originalStatus ChoreStatus
+  reason         String?
+  status         CancellationRequestStatus  @default(PENDING)
+  createdAt      DateTime                   @default(now())
+  resolvedAt     DateTime?
+
+  chore          Chore  @relation(fields: [choreId], references: [id], onDelete: Cascade)
+  requestedBy    User   @relation(fields: [requestedById], references: [id], onDelete: Cascade)
+
+  @@index([choreId])
+  @@map("cancellation_requests")
+}
+
+// Payment model for internal payment tracking
+model Payment {
+  id          String           @id @default(cuid())
+  choreId     String
+  fromUserId  String
+  toUserId    String
+  amount      Int              // rupees as integer for now
+  direction   PaymentDirection
+  method      PaymentMethod
+  notes       String?
+  createdAt   DateTime         @default(now())
+
+  chore   Chore @relation(fields: [choreId], references: [id], onDelete: Cascade)
+  fromUser User @relation("PaymentFrom", fields: [fromUserId], references: [id])
+  toUser   User @relation("PaymentTo", fields: [toUserId], references: [id])
+  notifications Notification[]
+
+  @@map("payments")
+}
+
+enum NotificationType {
+  APPLICATION_SUBMITTED
+  APPLICATION_ACCEPTED
+  APPLICATION_REJECTED
+  CHORE_ASSIGNED
+  CHORE_STATUS_CHANGED
+  CANCELLATION_REQUESTED
+  CANCELLATION_DECIDED
+  PAYMENT_RECORDED
+  RATING_RECEIVED
+  SYSTEM
+}
+
+model Notification {
+  id            String           @id @default(cuid())
+  userId        String
+  user          User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type          NotificationType
+  choreId       String?
+  chore         Chore?           @relation(fields: [choreId], references: [id], onDelete: Cascade)
+  applicationId String?
+  application   Application?     @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  paymentId     String?
+  payment       Payment?         @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  title         String
+  message       String
+  link          String?
+  isRead        Boolean          @default(false)
+  createdAt     DateTime         @default(now())
+
+  @@index([userId, isRead])
+  @@index([userId, createdAt])
+  @@map("notifications")
 }

@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useSession, signOut } from 'next-auth/react'
 import ThemeToggle from '@/components/theme/ThemeToggle'
+import NotificationsBell from '@/components/notifications/NotificationsBell'
 import Button from '@/components/ui/Button'
 
 export default function Navbar() {
@@ -40,6 +41,7 @@ export default function Navbar() {
             <ThemeToggle />
             {session ? (
               <>
+                <NotificationsBell />
                 {(session.user as any)?.role === 'CUSTOMER' && (
                   <Link href="/chores/new" className="hidden sm:inline-flex">
                     <Button variant="primary" size="sm">

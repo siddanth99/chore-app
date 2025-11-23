@@ -1,6 +1,7 @@
 // web/server/api/chores.ts
 import { prisma } from '../db/client'
-import { ChoreStatus, ChoreType } from '@prisma/client'
+import { ChoreStatus, ChoreType, NotificationType } from '@prisma/client'
+import { createNotification } from './notifications'
 
 /** ---------- Types ---------- */
 
@@ -62,6 +63,16 @@ export async function getChoreById(id: string) {
         },
         orderBy: { createdAt: 'desc' },
       },
+      cancellationRequests: {
+        where: { status: 'PENDING' },
+        orderBy: { createdAt: 'desc' },
+        take: 1,
+        include: {
+          requestedBy: {
+            select: { id: true, name: true },
+          },
+        },
+      },
     },
   })
 }
@@ -114,6 +125,13 @@ export async function markChoreInProgress(choreId: string, workerId: string) {
   // Ensure chore exists and is assigned to this worker
   const chore = await prisma.chore.findUnique({
     where: { id: choreId },
+    include: {
+      createdBy: {
+        select: {
+          id: true,
+        },
+      },
+    },
   })
 
   if (!chore) {
@@ -128,15 +146,34 @@ export async function markChoreInProgress(choreId: string, workerId: string) {
     throw new Error('Chore must be ASSIGNED to start')
   }
 
-  return prisma.chore.update({
+  const updatedChore = await prisma.chore.update({
     where: { id: choreId },
     data: { status: ChoreStatus.IN_PROGRESS },
   })
+
+  // Notify the customer
+  await createNotification({
+    userId: chore.createdById,
+    type: NotificationType.CHORE_STATUS_CHANGED,
+    choreId: chore.id,
+    title: 'Chore status updated',
+    message: `"${chore.title}" is now IN_PROGRESS`,
+    link: `/chores/${chore.id}`,
+  })
+
+  return updatedChore
 }
 
 export async function markChoreCompleted(choreId: string, workerId: string) {
   const chore = await prisma.chore.findUnique({
     where: { id: choreId },
+    include: {
+      createdBy: {
+        select: {
+          id: true,
+        },
+      },
+    },
   })
 
   if (!chore) {
@@ -154,10 +191,22 @@ export async function markChoreCompleted(choreId: string, workerId: string) {
     throw new Error('Chore must be IN_PROGRESS or ASSIGNED to complete')
   }
 
-  return prisma.chore.update({
+  const updatedChore = await prisma.chore.update({
     where: { id: choreId },
     data: { status: ChoreStatus.COMPLETED },
   })
+
+  // Notify the customer
+  await createNotification({
+    userId: chore.createdById,
+    type: NotificationType.CHORE_STATUS_CHANGED,
+    choreId: chore.id,
+    title: 'Chore status updated',
+    message: `"${chore.title}" is now COMPLETED`,
+    link: `/chores/${chore.id}`,
+  })
+
+  return updatedChore
 }
 
 /** ---------- Distance helpers ---------- */

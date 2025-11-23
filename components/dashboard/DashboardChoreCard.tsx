@@ -13,7 +13,7 @@ interface DashboardChoreCardProps {
 }
 
 // Helper function to get status badge variant
-function getStatusBadgeVariant(status: ChoreStatus): 'statusDraft' | 'statusPublished' | 'statusAssigned' | 'statusInProgress' | 'statusCompleted' | 'statusCancelled' {
+function getStatusBadgeVariant(status: ChoreStatus | string): 'statusDraft' | 'statusPublished' | 'statusAssigned' | 'statusInProgress' | 'statusCompleted' | 'statusCancelled' {
   switch (status) {
     case 'DRAFT':
       return 'statusDraft'
@@ -27,6 +27,8 @@ function getStatusBadgeVariant(status: ChoreStatus): 'statusDraft' | 'statusPubl
       return 'statusCompleted'
     case 'CANCELLED':
       return 'statusCancelled'
+    case 'CANCELLATION_REQUESTED':
+      return 'statusCancelled' // Use cancelled style for cancellation requested
     default:
       return 'statusDraft'
   }

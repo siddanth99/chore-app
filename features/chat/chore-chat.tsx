@@ -29,7 +29,7 @@ export default function ChoreChat({ choreId, currentUserId }: ChoreChatProps) {
   const [messages, setMessages] = useState<Message[]>([])
   const [loading, setLoading] = useState(false)
   const [sending, setSending] = useState(false)
-  const messagesEndRef = useRef<HTMLDivElement>(null)
+  const messagesContainerRef = useRef<HTMLDivElement>(null)
 
   // Load messages
   const loadMessages = async () => {
@@ -57,11 +57,6 @@ export default function ChoreChat({ choreId, currentUserId }: ChoreChatProps) {
 
     return () => clearInterval(interval)
   }, [choreId])
-
-  // Auto-scroll disabled to prevent page jumping
-  // useEffect(() => {
-  //   messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  // }, [messages])
 
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -103,13 +98,15 @@ export default function ChoreChat({ choreId, currentUserId }: ChoreChatProps) {
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages])
+    if (messagesContainerRef.current) {
+      messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight
+    }
+  }, [messages.length])
 
   return (
     <div className="flex flex-col h-80 sm:h-96 border border-gray-200 dark:border-slate-700 rounded-lg bg-gray-50 dark:bg-slate-900 overflow-hidden">
       {/* Messages area */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50 dark:bg-slate-900">
+      <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50 dark:bg-slate-900">
         {messages.length === 0 ? (
           <div className="text-center text-slate-500 dark:text-slate-400 py-8">
             <p className="text-sm">No messages yet. Say hello to get started.</p>
@@ -154,7 +151,6 @@ export default function ChoreChat({ choreId, currentUserId }: ChoreChatProps) {
                 </div>
               )
             })}
-            <div ref={messagesEndRef} />
           </>
         )}
       </div>
