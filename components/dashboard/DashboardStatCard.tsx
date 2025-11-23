@@ -16,9 +16,9 @@ export default function DashboardStatCard({
       <div className="flex items-center">
         <div className="text-3xl mr-4">{icon}</div>
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-medium text-gray-500 dark:text-slate-400">{label}</p>
-          <p className="text-2xl font-bold text-gray-900 dark:text-slate-50 truncate">{value}</p>
-          {subtitle && <p className="text-xs text-gray-400 dark:text-slate-500 mt-1">{subtitle}</p>}
+          <p className="text-sm font-medium text-slate-500 dark:text-slate-400">{label}</p>
+          <p className="text-2xl font-bold text-slate-900 dark:text-slate-50 truncate">{value}</p>
+          {subtitle && <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">{subtitle}</p>}
         </div>
       </div>
     </div>

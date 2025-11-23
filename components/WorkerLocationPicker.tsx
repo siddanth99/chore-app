@@ -79,7 +79,7 @@ export default function WorkerLocationPicker({
     return (
       <div className="space-y-2">
         <div className="flex items-center justify-between">
-          <p className="text-sm font-medium text-gray-700">
+          <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
             Set your location to find nearby chores
           </p>
           <button
@@ -114,8 +114,8 @@ export default function WorkerLocationPicker({
     <div className="rounded-lg border border-gray-300 bg-gray-50 p-3">
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-sm font-medium text-gray-700">Your Location</p>
-          <p className="text-xs text-gray-500">
+          <p className="text-sm font-medium text-slate-700 dark:text-slate-300">Your Location</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400">
             {lat.toFixed(4)}, {lng.toFixed(4)}
           </p>
         </div>

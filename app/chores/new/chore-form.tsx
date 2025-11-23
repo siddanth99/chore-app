@@ -146,7 +146,7 @@ export default function ChoreForm() {
       )}
 
       <div>
-        <label htmlFor="title" className="block text-sm font-medium text-gray-700 dark:text-slate-300">
+        <label htmlFor="title" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
           Title *
         </label>
         <input
@@ -154,14 +154,14 @@ export default function ChoreForm() {
           id="title"
           name="title"
           required
-          className="mt-1 block w-full rounded-md border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-gray-900 dark:text-slate-200 placeholder-gray-400 dark:placeholder-slate-500 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 sm:text-sm"
+          className="mt-1 block w-full rounded-md border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-slate-700 dark:text-slate-300 placeholder-gray-400 dark:placeholder-slate-500 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 sm:text-sm"
           value={formData.title}
           onChange={handleChange}
         />
       </div>
 
       <div>
-        <label htmlFor="description" className="block text-sm font-medium text-gray-700 dark:text-slate-300">
+        <label htmlFor="description" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
           Description *
         </label>
         <textarea
@@ -169,21 +169,21 @@ export default function ChoreForm() {
           name="description"
           required
           rows={4}
-          className="mt-1 block w-full rounded-md border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-gray-900 dark:text-slate-200 placeholder-gray-400 dark:placeholder-slate-500 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 sm:text-sm"
+          className="mt-1 block w-full rounded-md border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-slate-700 dark:text-slate-300 placeholder-gray-400 dark:placeholder-slate-500 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 sm:text-sm"
           value={formData.description}
           onChange={handleChange}
         />
       </div>
 
       <div>
-        <label htmlFor="type" className="block text-sm font-medium text-gray-700 dark:text-slate-300">
+        <label htmlFor="type" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
           Type *
         </label>
         <select
           id="type"
           name="type"
           required
-          className="mt-1 block w-full rounded-md border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-gray-900 dark:text-slate-200 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 sm:text-sm"
+          className="mt-1 block w-full rounded-md border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-slate-700 dark:text-slate-300 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 sm:text-sm"
           value={formData.type}
           onChange={handleChange}
         >
@@ -193,7 +193,7 @@ export default function ChoreForm() {
       </div>
 
       <div>
-        <label htmlFor="category" className="block text-sm font-medium text-gray-700 dark:text-slate-300">
+        <label htmlFor="category" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
           Category *
         </label>
         <input
@@ -202,14 +202,14 @@ export default function ChoreForm() {
           name="category"
           required
           placeholder="e.g., Cleaning, Gardening, Tech Support"
-          className="mt-1 block w-full rounded-md border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-gray-900 dark:text-slate-200 placeholder-gray-400 dark:placeholder-slate-500 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 sm:text-sm"
+          className="mt-1 block w-full rounded-md border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-slate-700 dark:text-slate-300 placeholder-gray-400 dark:placeholder-slate-500 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 sm:text-sm"
           value={formData.category}
           onChange={handleChange}
         />
       </div>
 
       <div>
-        <label htmlFor="budget" className="block text-sm font-medium text-gray-700 dark:text-slate-300">
+        <label htmlFor="budget" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
           Budget (optional)
         </label>
         <input
@@ -218,14 +218,14 @@ export default function ChoreForm() {
           name="budget"
           min="0"
           placeholder="Amount in your currency"
-          className="mt-1 block w-full rounded-md border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-gray-900 dark:text-slate-200 placeholder-gray-400 dark:placeholder-slate-500 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 sm:text-sm"
+          className="mt-1 block w-full rounded-md border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-slate-700 dark:text-slate-300 placeholder-gray-400 dark:placeholder-slate-500 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 sm:text-sm"
           value={formData.budget}
           onChange={handleChange}
         />
       </div>
 
       <div>
-        <label htmlFor="image" className="block text-sm font-medium text-gray-700 dark:text-slate-300">
+        <label htmlFor="image" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
           Image (optional)
         </label>
         <input
@@ -235,9 +235,9 @@ export default function ChoreForm() {
           accept="image/jpeg,image/jpg,image/png,image/webp"
           onChange={handleImageChange}
           disabled={uploadingImage}
-          className="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+          className="mt-1 block w-full text-sm text-slate-500 dark:text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 dark:file:bg-blue-900/20 file:text-blue-700 dark:file:text-blue-300 hover:file:bg-blue-100 dark:hover:file:bg-blue-900/30"
         />
-        <p className="mt-1 text-xs text-gray-500 dark:text-slate-400">
+        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
           JPEG, PNG, or WebP. Max 5MB.
         </p>
         {uploadingImage && (
@@ -266,7 +266,7 @@ export default function ChoreForm() {
       {formData.type === 'OFFLINE' && (
         <>
           <div>
-            <label htmlFor="locationAddress" className="block text-sm font-medium text-gray-700 dark:text-slate-300">
+            <label htmlFor="locationAddress" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
               Location Address *
             </label>
             <input
@@ -275,14 +275,14 @@ export default function ChoreForm() {
               name="locationAddress"
               required={formData.type === 'OFFLINE'}
               placeholder="Street address, city, state"
-              className="mt-1 block w-full rounded-md border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-gray-900 dark:text-slate-200 placeholder-gray-400 dark:placeholder-slate-500 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 sm:text-sm"
+              className="mt-1 block w-full rounded-md border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-slate-700 dark:text-slate-300 placeholder-gray-400 dark:placeholder-slate-500 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 sm:text-sm"
               value={formData.locationAddress}
               onChange={handleChange}
             />
           </div>
           
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
               Location on Map *
             </label>
             <MapPicker
@@ -298,7 +298,7 @@ export default function ChoreForm() {
               heightClass="h-64"
             />
             {formData.locationLat && formData.locationLng && (
-              <p className="mt-2 text-sm text-gray-600 dark:text-slate-400">
+              <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
                 Coordinates: Lat {parseFloat(formData.locationLat).toFixed(6)}, Lng{' '}
                 {parseFloat(formData.locationLng).toFixed(6)}
               </p>
@@ -308,14 +308,14 @@ export default function ChoreForm() {
       )}
 
       <div>
-        <label htmlFor="dueAt" className="block text-sm font-medium text-gray-700 dark:text-slate-300">
+        <label htmlFor="dueAt" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
           Due Date (optional)
         </label>
         <input
           type="datetime-local"
           id="dueAt"
           name="dueAt"
-          className="mt-1 block w-full rounded-md border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-gray-900 dark:text-slate-200 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 sm:text-sm"
+          className="mt-1 block w-full rounded-md border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-slate-700 dark:text-slate-300 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 sm:text-sm"
           value={formData.dueAt}
           onChange={handleChange}
         />

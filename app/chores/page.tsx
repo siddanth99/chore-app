@@ -1,5 +1,4 @@
 // web/app/chores/page.tsx
-import Link from 'next/link'
 import { ChoreType } from '@prisma/client'
 import { getCurrentUser } from '@/server/auth/role'
 import {
@@ -67,29 +66,13 @@ export default async function ChoresPage({
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="mx-auto max-w-7xl">
-        <div className="mb-8 flex items-center justify-between">
-          <h1 className="text-3xl font-bold text-gray-900">Available Chores</h1>
-          {user?.role === 'CUSTOMER' && (
-            <Link
-              href="/chores/new"
-              className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-500"
-            >
-              Create New Chore
-            </Link>
-          )}
-        </div>
-
-        <ChoresListClient
-          chores={chores}
-          user={user}
-          initialFilters={filters}
-          initialWorkerLat={!Number.isNaN(workerLat) ? workerLat : null}
-          initialWorkerLng={!Number.isNaN(workerLng) ? workerLng : null}
-          initialDistanceKm={!Number.isNaN(distanceKm) ? distanceKm : 10}
-        />
-      </div>
-    </div>
+    <ChoresListClient
+      chores={chores}
+      user={user}
+      initialFilters={filters}
+      initialWorkerLat={!Number.isNaN(workerLat) ? workerLat : null}
+      initialWorkerLng={!Number.isNaN(workerLng) ? workerLng : null}
+      initialDistanceKm={!Number.isNaN(distanceKm) ? distanceKm : 10}
+    />
   )
 }

@@ -28,7 +28,7 @@ export default async function ProfilePage({
       <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-4xl">
           <div className="rounded-lg bg-white shadow p-6">
-            <p className="text-gray-500">User not found</p>
+            <p className="text-slate-500 dark:text-slate-400">User not found</p>
           </div>
         </div>
       </div>

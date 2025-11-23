@@ -24,8 +24,8 @@ export default function DashboardClient({ user, role, data }: DashboardClientPro
         <div className="mx-auto max-w-7xl">
           <div className="mb-8 flex items-center justify-between">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900 dark:text-slate-50">Dashboard</h1>
-              <p className="text-sm text-gray-500 dark:text-slate-400 mt-1">Worker Overview</p>
+              <h1 className="text-3xl font-bold text-slate-900 dark:text-slate-50">Dashboard</h1>
+              <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Worker Overview</p>
             </div>
             <LogoutButton />
           </div>
@@ -109,8 +109,8 @@ export default function DashboardClient({ user, role, data }: DashboardClientPro
       <div className="mx-auto max-w-7xl">
         <div className="mb-8 flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-slate-50">Dashboard</h1>
-            <p className="text-sm text-gray-500 dark:text-slate-400 mt-1">Customer Overview</p>
+            <h1 className="text-3xl font-bold text-slate-900 dark:text-slate-50">Dashboard</h1>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Customer Overview</p>
           </div>
           <div className="flex gap-4">
             <Link href="/chores/new">

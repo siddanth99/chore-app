@@ -101,7 +101,7 @@ export default function MapPicker({
       <div
         className={`w-full rounded-lg border border-gray-300 overflow-hidden ${heightClass} flex items-center justify-center bg-gray-100`}
       >
-        <p className="text-gray-500">Loading map...</p>
+        <p className="text-slate-500 dark:text-slate-400">Loading map...</p>
       </div>
     )
   }
@@ -109,7 +109,7 @@ export default function MapPicker({
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between">
-        <p className="text-sm text-gray-600">
+        <p className="text-sm text-slate-500 dark:text-slate-400">
           Click on the map to set the location, or use your current location
         </p>
         <button
@@ -151,7 +151,7 @@ export default function MapPicker({
         </MapContainer>
       </div>
       {lat !== null && lng !== null && (
-        <p className="text-xs text-gray-500">
+        <p className="text-xs text-slate-500 dark:text-slate-400">
           Lat: {lat.toFixed(6)}, Lng: {lng.toFixed(6)}
         </p>
       )}

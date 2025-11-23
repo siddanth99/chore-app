@@ -18,16 +18,16 @@ export default async function ChoreDetailPage(props: {
     return (
       <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-2xl rounded-lg bg-white p-6 shadow">
-          <h1 className="text-xl font-semibold text-gray-900 mb-4">
+          <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-50 mb-4">
             No chore found
           </h1>
-          <p className="text-gray-700 mb-2">
+          <p className="text-slate-700 dark:text-slate-300 mb-2">
             We couldn&apos;t find a chore with this ID:
           </p>
-          <code className="rounded bg-gray-100 px-2 py-1 text-sm text-gray-800">
+          <code className="rounded bg-gray-100 dark:bg-slate-800 px-2 py-1 text-sm text-slate-800 dark:text-slate-200">
             {id}
           </code>
-          <p className="mt-4 text-sm text-gray-600">
+          <p className="mt-4 text-sm text-slate-500 dark:text-slate-400">
             If you expected something here, double-check the ID and make sure the
             chore exists in the database.
           </p>

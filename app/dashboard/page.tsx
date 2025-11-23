@@ -25,20 +25,20 @@ export default async function DashboardPage() {
         <div className="mx-auto max-w-3xl">
           <div className="rounded-lg bg-white shadow px-6 py-8">
             <div className="flex items-center justify-between mb-6">
-              <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
+              <h1 className="text-3xl font-bold text-slate-900 dark:text-slate-50">Dashboard</h1>
             </div>
             <div className="space-y-4">
               <div>
-                <p className="text-sm text-gray-500">Name</p>
-                <p className="text-lg font-medium text-gray-900">{user.name}</p>
+                <p className="text-sm text-slate-500 dark:text-slate-400">Name</p>
+                <p className="text-lg font-medium text-slate-900 dark:text-slate-50">{user.name}</p>
               </div>
               <div>
-                <p className="text-sm text-gray-500">Email</p>
-                <p className="text-lg font-medium text-gray-900">{user.email}</p>
+                <p className="text-sm text-slate-500 dark:text-slate-400">Email</p>
+                <p className="text-lg font-medium text-slate-900 dark:text-slate-50">{user.email}</p>
               </div>
               <div>
-                <p className="text-sm text-gray-500">Role</p>
-                <p className="text-lg font-medium text-gray-900">{user.role}</p>
+                <p className="text-sm text-slate-500 dark:text-slate-400">Role</p>
+                <p className="text-lg font-medium text-slate-900 dark:text-slate-50">{user.role}</p>
               </div>
             </div>
           </div>

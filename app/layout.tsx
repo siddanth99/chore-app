@@ -26,13 +26,21 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html
+      lang="en"
+      suppressHydrationWarning
+      // 👇 theme classes live on <html>, so next-themes can toggle them
+      className="bg-gray-50 text-slate-700 dark:bg-slate-950 dark:text-slate-300"
+    >
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-gray-50 text-gray-900 dark:bg-slate-950 dark:text-slate-100`}
+        // 👇 fonts + general typography live on <body>
+        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         <Providers>
           <Navbar />
-          {children}
+          <main className="min-h-screen">
+            {children}
+          </main>
         </Providers>
       </body>
     </html>

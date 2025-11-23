@@ -15,21 +15,21 @@ export default function Navbar() {
           <div className="flex items-center gap-8">
             <Link
               href="/"
-              className="text-xl font-semibold tracking-tight text-gray-900 hover:text-blue-600 dark:text-slate-50 dark:hover:text-blue-400 transition-colors"
+              className="text-xl font-semibold tracking-tight text-slate-900 hover:text-blue-600 dark:text-slate-50 dark:hover:text-blue-400 transition-colors"
             >
               ChoreMarket
             </Link>
             <div className="hidden md:flex gap-6">
               <Link
                 href="/chores"
-                className="text-gray-700 hover:text-blue-600 font-medium dark:text-slate-300 dark:hover:text-blue-400 transition-colors"
+                className="text-slate-700 hover:text-blue-600 font-medium dark:text-slate-300 dark:hover:text-blue-400 transition-colors"
               >
                 Browse Chores
               </Link>
               {session && (
                 <Link
                   href="/dashboard"
-                  className="text-gray-700 hover:text-blue-600 font-medium dark:text-slate-300 dark:hover:text-blue-400 transition-colors"
+                  className="text-slate-700 hover:text-blue-600 font-medium dark:text-slate-300 dark:hover:text-blue-400 transition-colors"
                 >
                   Dashboard
                 </Link>
@@ -49,7 +49,7 @@ export default function Navbar() {
                 )}
                 <Link
                   href={`/profile/${(session.user as any)?.id}`}
-                  className="text-gray-700 hover:text-blue-600 font-medium dark:text-slate-300 dark:hover:text-blue-400 transition-colors"
+                  className="text-slate-700 hover:text-blue-600 font-medium dark:text-slate-300 dark:hover:text-blue-400 transition-colors"
                 >
                   Profile
                 </Link>

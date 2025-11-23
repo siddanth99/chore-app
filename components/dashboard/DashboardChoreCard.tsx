@@ -75,7 +75,7 @@ export default function DashboardChoreCard({
       )}
       <div className="p-6">
         <div className="flex items-start justify-between mb-2">
-          <h3 className="text-lg font-semibold text-gray-900">{chore.title}</h3>
+          <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-50">{chore.title}</h3>
           <div className="flex gap-1">
             <Badge variant={getTypeBadgeVariant(chore.type)}>
               {chore.type}
@@ -90,20 +90,20 @@ export default function DashboardChoreCard({
         </div>
 
         <div className="space-y-2 mb-4">
-          <div className="flex items-center text-sm text-gray-500">
+          <div className="flex items-center text-sm text-slate-500 dark:text-slate-400">
             <span className="font-medium">Category:</span>
             <span className="ml-2">{chore.category}</span>
           </div>
 
           {chore.type === 'OFFLINE' && chore.locationAddress && (
-            <div className="flex items-center text-sm text-gray-500">
+            <div className="flex items-center text-sm text-slate-500 dark:text-slate-400">
               <span className="font-medium">📍</span>
               <span className="ml-2 truncate">{chore.locationAddress}</span>
             </div>
           )}
 
           {chore.dueAt && (
-            <div className="flex items-center text-sm text-gray-500">
+            <div className="flex items-center text-sm text-slate-500 dark:text-slate-400">
               <span className="font-medium">Due:</span>
               <span className="ml-2">
                 {new Date(chore.dueAt).toLocaleDateString()}
@@ -112,11 +112,11 @@ export default function DashboardChoreCard({
           )}
 
           {showWorker && chore.assignedWorker && (
-            <div className="flex items-center text-sm text-gray-500">
+            <div className="flex items-center text-sm text-slate-500 dark:text-slate-400">
               <span className="font-medium">Worker:</span>
               <Link
                 href={`/profile/${chore.assignedWorker.id}`}
-                className="ml-2 text-blue-600 hover:text-blue-500"
+                className="ml-2 text-blue-600 hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300"
               >
                 {chore.assignedWorker.name}
               </Link>
@@ -131,7 +131,7 @@ export default function DashboardChoreCard({
           )}
 
           {chore.budget && !showEarnings && (
-            <div className="flex items-center text-sm text-gray-500">
+            <div className="flex items-center text-sm text-slate-500 dark:text-slate-400">
               <span className="font-medium">Budget:</span>
               <span className="ml-2">${chore.budget}</span>
             </div>
@@ -158,13 +158,13 @@ export default function DashboardChoreCard({
           )}
         </div>
 
-        <div className="flex items-center justify-between pt-4 border-t border-gray-200">
+        <div className="flex items-center justify-between pt-4 border-t border-gray-200 dark:border-slate-700">
           {chore.createdBy && (
-            <span className="text-sm text-gray-500">By {chore.createdBy.name}</span>
+            <span className="text-sm text-slate-500 dark:text-slate-400">By {chore.createdBy.name}</span>
           )}
           <Link
             href={`/chores/${chore.id}`}
-            className="text-sm font-medium text-blue-600 hover:text-blue-500"
+            className="text-sm font-medium text-blue-600 hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300"
           >
             View Details →
           </Link>

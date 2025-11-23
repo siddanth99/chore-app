@@ -19,11 +19,11 @@ export default async function HomePage() {
       <div className="bg-gradient-to-br from-blue-600 to-blue-800 dark:from-blue-700 dark:to-blue-900 text-white">
         <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8 lg:py-24">
           <div className="text-center">
-            <h1 className="text-4xl font-bold tracking-tight text-gray-900 dark:text-slate-50 sm:text-5xl md:text-6xl">
+            <h1 className="text-4xl font-bold tracking-tight text-slate-900 dark:text-slate-50 sm:text-5xl md:text-6xl">
               Get your chores done.<br className="hidden sm:block" />
               <span className="text-blue-600 dark:text-blue-400">Earn money on your time.</span>
             </h1>
-            <p className="mx-auto mt-6 max-w-2xl text-sm leading-8 text-gray-600 dark:text-slate-300">
+            <p className="mx-auto mt-6 max-w-2xl text-sm leading-8 text-slate-700 dark:text-slate-300">
               ChoreMarket connects busy customers with trusted local workers for everyday tasks –
               from deliveries and repairs to online help. Post a chore in minutes or browse nearby
               jobs and start earning today.
@@ -72,10 +72,10 @@ export default async function HomePage() {
       {/* Categories Section */}
       <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
         <div className="text-center">
-          <h2 className="text-3xl font-bold tracking-tight text-gray-900 dark:text-slate-50 sm:text-4xl">
+          <h2 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-50 sm:text-4xl">
             Popular Categories
           </h2>
-          <p className="mt-4 text-sm text-gray-600 dark:text-slate-300">
+          <p className="mt-4 text-sm text-slate-700 dark:text-slate-300">
             Browse chores by category or find the help you need
           </p>
         </div>
@@ -88,7 +88,7 @@ export default async function HomePage() {
             >
               <div className="text-center">
                 <div className="text-4xl mb-2">{category.icon}</div>
-                <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-200 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
                   {category.name}
                 </h3>
               </div>
@@ -101,10 +101,10 @@ export default async function HomePage() {
       <div className="bg-white dark:bg-slate-900">
         <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
           <div className="rounded-lg bg-blue-50 dark:bg-blue-900/20 px-6 py-12 text-center border border-blue-100 dark:border-blue-800">
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-slate-50">
+            <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-50">
               Ready to get started?
             </h2>
-            <p className="mt-4 text-sm text-gray-600 dark:text-slate-300">
+            <p className="mt-4 text-sm text-slate-700 dark:text-slate-300">
               {user
                 ? 'Browse available chores or post your own task.'
                 : 'Sign up to start posting chores or finding work opportunities.'}

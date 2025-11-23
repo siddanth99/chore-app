@@ -111,7 +111,7 @@ export default function ChoreChat({ choreId, currentUserId }: ChoreChatProps) {
       {/* Messages area */}
       <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50 dark:bg-slate-900">
         {messages.length === 0 ? (
-          <div className="text-center text-gray-500 dark:text-slate-400 py-8">
+          <div className="text-center text-slate-500 dark:text-slate-400 py-8">
             <p className="text-sm">No messages yet. Say hello to get started.</p>
           </div>
         ) : (
@@ -129,11 +129,11 @@ export default function ChoreChat({ choreId, currentUserId }: ChoreChatProps) {
                     className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg shadow-sm ${
                       isCurrentUser
                         ? 'bg-blue-600 text-white rounded-br-none dark:bg-blue-500'
-                        : 'bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-200 border border-gray-200 dark:border-slate-700 rounded-bl-none'
+                        : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-gray-200 dark:border-slate-700 rounded-bl-none'
                     }`}
                   >
                     {!isCurrentUser && (
-                      <p className="text-xs font-medium mb-1 text-gray-600 dark:text-slate-400">
+                      <p className="text-xs font-medium mb-1 text-slate-500 dark:text-slate-400">
                         {msg.fromUser.name}
                       </p>
                     )}
@@ -142,7 +142,7 @@ export default function ChoreChat({ choreId, currentUserId }: ChoreChatProps) {
                       className={`text-xs mt-1 ${
                         isCurrentUser
                           ? 'text-blue-100'
-                          : 'text-gray-500 dark:text-slate-400'
+                          : 'text-slate-500 dark:text-slate-400'
                       }`}
                     >
                       {new Date(msg.createdAt).toLocaleTimeString([], {
@@ -167,7 +167,7 @@ export default function ChoreChat({ choreId, currentUserId }: ChoreChatProps) {
             onChange={(e) => setMessage(e.target.value)}
             placeholder="Type your message..."
             rows={2}
-            className="flex-1 rounded-md border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-3 py-2 text-gray-900 dark:text-slate-200 placeholder-gray-400 dark:placeholder-slate-500 text-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 resize-none"
+            className="flex-1 rounded-md border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-3 py-2 text-slate-700 dark:text-slate-300 placeholder-gray-400 dark:placeholder-slate-500 text-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 resize-none"
             disabled={sending}
           />
           <Button

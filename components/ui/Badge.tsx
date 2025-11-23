@@ -19,7 +19,7 @@ interface BadgeProps {
 
 export default function Badge({ variant, children, className = '' }: BadgeProps) {
   const variantClasses: Record<BadgeVariant, string> = {
-    statusDraft: 'bg-gray-100 text-gray-800 dark:bg-slate-700 dark:text-slate-200',
+    statusDraft: 'bg-gray-100 text-slate-800 dark:bg-slate-700 dark:text-slate-200',
     statusPublished: 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300',
     statusAssigned: 'bg-orange-100 text-orange-800 dark:bg-orange-900/50 dark:text-orange-300',
     statusInProgress: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300',
@@ -27,7 +27,7 @@ export default function Badge({ variant, children, className = '' }: BadgeProps)
     statusCancelled: 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300',
     typeOnline: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/50 dark:text-indigo-300',
     typeOffline: 'bg-teal-100 text-teal-800 dark:bg-teal-900/50 dark:text-teal-300',
-    neutral: 'bg-gray-100 text-gray-800 dark:bg-slate-700 dark:text-slate-200',
+    neutral: 'bg-gray-100 text-slate-800 dark:bg-slate-700 dark:text-slate-200',
   }
   
   return (

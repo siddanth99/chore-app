@@ -288,7 +288,7 @@ export default function ChoreDetailClient({
     <div className="min-h-screen bg-gray-50 dark:bg-slate-950 py-12 px-4 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-4xl">
         {/* Status debug line */}
-        <div className="mb-2 text-xs text-gray-500 dark:text-slate-400">
+        <div className="mb-2 text-xs text-slate-500 dark:text-slate-400">
           Status: {chore.status} | You are: {currentUser?.role ?? 'Guest'}
         </div>
 
@@ -314,7 +314,7 @@ export default function ChoreDetailClient({
           )}
           
           <div className="mb-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-slate-50">{chore.title}</h1>
+            <h1 className="text-3xl font-bold text-slate-900 dark:text-slate-50">{chore.title}</h1>
             <div className="flex gap-2">
               <Badge variant={getTypeBadgeVariant(chore.type)}>
                 {chore.type}
@@ -327,31 +327,31 @@ export default function ChoreDetailClient({
 
             <div className="mb-6 space-y-4">
               <div>
-                <h3 className="text-sm font-medium text-gray-500 dark:text-slate-400">Description</h3>
-                <p className="mt-1 whitespace-pre-wrap text-gray-900 dark:text-slate-200">
+                <h3 className="text-sm font-medium text-slate-500 dark:text-slate-400">Description</h3>
+                <p className="mt-1 whitespace-pre-wrap text-slate-700 dark:text-slate-300">
                   {chore.description}
                 </p>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <h3 className="text-sm font-medium text-gray-500 dark:text-slate-400">Type</h3>
-                  <p className="mt-1 text-gray-900 dark:text-slate-200">{chore.type}</p>
+                  <h3 className="text-sm font-medium text-slate-500 dark:text-slate-400">Type</h3>
+                  <p className="mt-1 text-slate-700 dark:text-slate-300">{chore.type}</p>
                 </div>
                 <div>
-                  <h3 className="text-sm font-medium text-gray-500 dark:text-slate-400">Category</h3>
-                  <p className="mt-1 text-gray-900 dark:text-slate-200">{chore.category}</p>
+                  <h3 className="text-sm font-medium text-slate-500 dark:text-slate-400">Category</h3>
+                  <p className="mt-1 text-slate-700 dark:text-slate-300">{chore.category}</p>
                 </div>
                 {chore.budget && (
                   <div>
-                    <h3 className="text-sm font-medium text-gray-500 dark:text-slate-400">Budget</h3>
-                    <p className="mt-1 text-gray-900 dark:text-slate-200">${chore.budget}</p>
+                    <h3 className="text-sm font-medium text-slate-500 dark:text-slate-400">Budget</h3>
+                    <p className="mt-1 text-slate-700 dark:text-slate-300">${chore.budget}</p>
                   </div>
                 )}
                 {chore.dueAt && (
                   <div>
-                    <h3 className="text-sm font-medium text-gray-500 dark:text-slate-400">Due Date</h3>
-                    <p className="mt-1 text-gray-900 dark:text-slate-200">
+                    <h3 className="text-sm font-medium text-slate-500 dark:text-slate-400">Due Date</h3>
+                    <p className="mt-1 text-slate-700 dark:text-slate-300">
                       {new Date(chore.dueAt).toLocaleDateString()}
                     </p>
                   </div>
@@ -360,8 +360,8 @@ export default function ChoreDetailClient({
 
               {chore.type === 'OFFLINE' && chore.locationAddress && (
                 <div>
-                  <h3 className="text-sm font-medium text-gray-500 dark:text-slate-400">Location</h3>
-                  <p className="mt-1 text-gray-900 dark:text-slate-200">{chore.locationAddress}</p>
+                  <h3 className="text-sm font-medium text-slate-500 dark:text-slate-400">Location</h3>
+                  <p className="mt-1 text-slate-700 dark:text-slate-300">{chore.locationAddress}</p>
                 </div>
               )}
 
@@ -370,7 +370,7 @@ export default function ChoreDetailClient({
                 chore.locationLat &&
                 chore.locationLng && (
                   <div>
-                    <h3 className="text-sm font-medium text-gray-500 dark:text-slate-400 mb-2">
+                    <h3 className="text-sm font-medium text-slate-500 dark:text-slate-400 mb-2">
                       Location Map
                     </h3>
                     <MapPreview
@@ -383,13 +383,13 @@ export default function ChoreDetailClient({
                 )}
 
               <div>
-                <h3 className="text-sm font-medium text-gray-500 dark:text-slate-400">Posted by</h3>
-                <p className="mt-1 text-gray-900 dark:text-slate-200">{chore.createdBy.name}</p>
+                <h3 className="text-sm font-medium text-slate-500 dark:text-slate-400">Posted by</h3>
+                <p className="mt-1 text-slate-700 dark:text-slate-300">{chore.createdBy.name}</p>
               </div>
 
               {chore.assignedWorker && (
                 <div>
-                  <h3 className="text-sm font-medium text-gray-500 dark:text-slate-400">Assigned to</h3>
+                  <h3 className="text-sm font-medium text-slate-500 dark:text-slate-400">Assigned to</h3>
                   <div className="mt-1">
                     <Link
                       href={`/profile/${chore.assignedWorker.id}`}
@@ -406,14 +406,14 @@ export default function ChoreDetailClient({
                               className={`text-sm ${
                                 star <= Math.round(assignedWorkerRating.average)
                                   ? 'text-yellow-400'
-                                  : 'text-gray-300 dark:text-slate-600'
+                                  : 'text-slate-400 dark:text-slate-600'
                               }`}
                             >
                               ★
                             </span>
                           ))}
                         </div>
-                        <span className="text-sm text-gray-600 dark:text-slate-400">
+                        <span className="text-sm text-slate-500 dark:text-slate-400">
                           {assignedWorkerRating.average.toFixed(1)} ({assignedWorkerRating.count} reviews)
                         </span>
                       </div>
@@ -441,10 +441,10 @@ export default function ChoreDetailClient({
           <Card className="mb-6 border-2 border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20">
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
               <div>
-                <h3 className="mb-2 text-lg font-semibold text-gray-900 dark:text-slate-50">
+                <h3 className="mb-2 text-lg font-semibold text-slate-800 dark:text-slate-100">
                   Interested in this chore?
                 </h3>
-                <p className="text-sm text-gray-600 dark:text-slate-300">
+                <p className="text-sm text-slate-700 dark:text-slate-300">
                   Apply now to get started and submit your bid.
                 </p>
               </div>
@@ -467,14 +467,14 @@ export default function ChoreDetailClient({
         {canApply && (
           <div id="apply-form">
             <Card className="mb-6">
-              <h2 className="mb-4 text-xl font-semibold text-gray-900 dark:text-slate-50">
+              <h2 className="mb-4 text-xl font-semibold text-slate-800 dark:text-slate-100">
                 Apply for this Chore
               </h2>
               <form onSubmit={handleApply} className="space-y-4">
                 <div>
                   <label
                     htmlFor="bidAmount"
-                    className="block text-sm font-medium text-gray-700 dark:text-slate-300"
+                    className="block text-sm font-medium text-slate-700 dark:text-slate-300"
                   >
                     Bid Amount (optional)
                   </label>
@@ -483,7 +483,7 @@ export default function ChoreDetailClient({
                     id="bidAmount"
                     min="0"
                     step="0.01"
-                    className="mt-1 block w-full rounded-md border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-gray-900 dark:text-slate-200 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 sm:text-sm"
+                    className="mt-1 block w-full rounded-md border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-slate-700 dark:text-slate-300 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 sm:text-sm"
                     value={bidAmount}
                     onChange={(e) => setBidAmount(e.target.value)}
                   />
@@ -491,14 +491,14 @@ export default function ChoreDetailClient({
                 <div>
                   <label
                     htmlFor="message"
-                    className="block text-sm font-medium text-gray-700 dark:text-slate-300"
+                    className="block text-sm font-medium text-slate-700 dark:text-slate-300"
                   >
                     Message (optional)
                   </label>
                   <textarea
                     id="message"
                     rows={4}
-                    className="mt-1 block w-full rounded-md border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-gray-900 dark:text-slate-200 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 sm:text-sm"
+                    className="mt-1 block w-full rounded-md border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-slate-700 dark:text-slate-300 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 sm:text-sm"
                     value={message}
                     onChange={(e) => setMessage(e.target.value)}
                   />
@@ -518,7 +518,7 @@ export default function ChoreDetailClient({
         {/* Customer: Applications list */}
         {isOwner && applications && applications.length > 0 && (
           <Card className="mb-6">
-            <h2 className="mb-4 text-xl font-semibold text-gray-900">
+            <h2 className="mb-4 text-xl font-semibold text-slate-800 dark:text-slate-100">
               Applications ({applications.length})
             </h2>
               <div className="space-y-4">
@@ -530,7 +530,7 @@ export default function ChoreDetailClient({
                     <div className="mb-2 flex items-start justify-between">
                       <div className="flex-1">
                         <div className="flex items-center gap-2">
-                          <h3 className="font-medium text-gray-900 dark:text-slate-50">
+                          <h3 className="font-medium text-slate-900 dark:text-slate-50">
                             {app.worker.name}
                           </h3>
                           {app.workerRating && app.workerRating.count > 0 && (
@@ -542,20 +542,20 @@ export default function ChoreDetailClient({
                                     className={`text-xs ${
                                       star <= Math.round(app.workerRating.average)
                                         ? 'text-yellow-400'
-                                        : 'text-gray-300 dark:text-slate-600'
+                                        : 'text-slate-400 dark:text-slate-600'
                                     }`}
                                   >
                                     ★
                                   </span>
                                 ))}
                               </div>
-                              <span className="text-xs text-gray-600 dark:text-slate-400">
+                              <span className="text-xs text-slate-500 dark:text-slate-400">
                                 {app.workerRating.average.toFixed(1)} ({app.workerRating.count})
                               </span>
                             </div>
                           )}
                         </div>
-                        <p className="text-sm text-gray-500 dark:text-slate-400">
+                        <p className="text-sm text-slate-500 dark:text-slate-400">
                           {app.worker.email}
                         </p>
                       </div>
@@ -572,14 +572,14 @@ export default function ChoreDetailClient({
                       </Badge>
                     </div>
                     {app.bidAmount && (
-                      <p className="mb-2 text-sm text-gray-600 dark:text-slate-300">
+                      <p className="mb-2 text-sm text-slate-700 dark:text-slate-300">
                         <span className="font-medium">Bid:</span> ${app.bidAmount}
                       </p>
                     )}
                     {app.message && (
-                      <p className="mb-2 text-sm text-gray-600 dark:text-slate-300">{app.message}</p>
+                      <p className="mb-2 text-sm text-slate-700 dark:text-slate-300">{app.message}</p>
                     )}
-                    <p className="text-xs text-gray-500 dark:text-slate-400">
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
                       Applied on {new Date(app.createdAt).toLocaleDateString()}
                     </p>
                     {app.status === 'PENDING' && chore.status === 'PUBLISHED' && (
@@ -603,10 +603,10 @@ export default function ChoreDetailClient({
           <Card className="mb-6 text-center">
             <div className="max-w-md mx-auto py-8">
               <div className="text-5xl mb-4">📋</div>
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-50 mb-2">
+              <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-50 mb-2">
                 No applications yet
               </h3>
-              <p className="text-gray-500 dark:text-slate-400">
+              <p className="text-slate-500 dark:text-slate-400">
                 Workers will see this in their nearby list if location is set. Check back soon!
               </p>
             </div>
@@ -616,7 +616,7 @@ export default function ChoreDetailClient({
         {/* Assigned Worker: Status update buttons */}
         {isAssignedWorker && (
           <Card className="mb-6">
-            <h2 className="mb-4 text-xl font-semibold text-gray-900 dark:text-slate-50">
+            <h2 className="mb-4 text-xl font-semibold text-slate-800 dark:text-slate-100">
               Update Status
             </h2>
             <div className="flex gap-3">
@@ -647,7 +647,7 @@ export default function ChoreDetailClient({
         {/* Rating for this chore - Read-only card visible to all users */}
         {choreRating && (
           <Card className="mb-6">
-            <h2 className="mb-4 text-xl font-semibold text-gray-900 dark:text-slate-50">
+            <h2 className="mb-4 text-xl font-semibold text-slate-800 dark:text-slate-100">
               Rating for this Chore
             </h2>
               <div className="space-y-3">
@@ -658,20 +658,20 @@ export default function ChoreDetailClient({
                       className={`text-2xl ${
                         star <= choreRating.score
                           ? 'text-yellow-400'
-                          : 'text-gray-300 dark:text-slate-600'
+                          : 'text-slate-400 dark:text-slate-600'
                       }`}
                     >
                       ★
                     </span>
                   ))}
-                  <span className="ml-2 text-sm font-medium text-gray-900 dark:text-slate-50">
+                  <span className="ml-2 text-sm font-medium text-slate-900 dark:text-slate-50">
                     {choreRating.score}/5
                   </span>
                 </div>
                 {choreRating.comment && (
-                  <p className="text-sm text-gray-700 dark:text-slate-300">{choreRating.comment}</p>
+                  <p className="text-sm text-slate-700 dark:text-slate-300">{choreRating.comment}</p>
                 )}
-                <p className="text-xs text-gray-500 dark:text-slate-400">
+                <p className="text-xs text-slate-500 dark:text-slate-400">
                   By {choreRating.fromUser.name}
                 </p>
               </div>
@@ -685,12 +685,12 @@ export default function ChoreDetailClient({
           chore.status === 'COMPLETED' &&
           !hasRated && (
             <Card className="mb-6">
-              <h2 className="mb-4 text-xl font-semibold text-gray-900">
+              <h2 className="mb-4 text-xl font-semibold text-slate-800 dark:text-slate-100">
                 Rate Worker
               </h2>
                 <form onSubmit={handleSubmitRating} className="space-y-4">
                   <div>
-                    <label className="mb-2 block text-sm font-medium text-gray-700">
+                    <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">
                       Rating (1-5 stars)
                     </label>
                     <div className="flex items-center gap-2">
@@ -702,13 +702,13 @@ export default function ChoreDetailClient({
                           className={`text-2xl ${
                             star <= ratingScore
                               ? 'text-yellow-400'
-                              : 'text-gray-300'
+                              : 'text-slate-400 dark:text-slate-600'
                           } hover:text-yellow-400 transition-colors`}
                         >
                           ★
                         </button>
                       ))}
-                      <span className="ml-2 text-sm text-gray-600">
+                      <span className="ml-2 text-sm text-slate-500 dark:text-slate-400">
                         ({ratingScore}/5)
                       </span>
                     </div>
@@ -716,14 +716,14 @@ export default function ChoreDetailClient({
                   <div>
                     <label
                       htmlFor="ratingComment"
-                      className="block text-sm font-medium text-gray-700"
+                      className="block text-sm font-medium text-slate-700 dark:text-slate-300"
                     >
                       Comment (optional)
                     </label>
                     <textarea
                       id="ratingComment"
                       rows={4}
-                      className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-black shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 sm:text-sm"
+                      className="mt-1 block w-full rounded-md border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-slate-700 dark:text-slate-300 placeholder-gray-400 dark:placeholder-slate-500 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 sm:text-sm"
                       value={ratingComment}
                       onChange={(e) => setRatingComment(e.target.value)}
                       placeholder="Share your experience..."
@@ -746,8 +746,8 @@ export default function ChoreDetailClient({
           currentUser.role !== 'CUSTOMER' &&
           !isOwner && (
             <Card className="mb-6">
-              <h2 className="mb-2 text-xl font-semibold text-gray-900 dark:text-slate-50">Rating</h2>
-              <p className="text-sm text-gray-600 dark:text-slate-400">
+              <h2 className="mb-2 text-xl font-semibold text-slate-800 dark:text-slate-100">Rating</h2>
+              <p className="text-sm text-slate-500 dark:text-slate-400">
                 Only the customer can rate this chore.
               </p>
             </Card>
@@ -761,7 +761,7 @@ export default function ChoreDetailClient({
             chore.status === 'IN_PROGRESS' ||
             chore.status === 'COMPLETED') && (
             <Card className="mb-6">
-              <h2 className="mb-4 text-xl font-semibold text-gray-900 dark:text-slate-50">Chat</h2>
+              <h2 className="mb-4 text-xl font-semibold text-slate-800 dark:text-slate-100">Chat</h2>
               <ChoreChat choreId={chore.id} currentUserId={currentUser.id} />
             </Card>
           )}
@@ -774,8 +774,8 @@ export default function ChoreDetailClient({
               chore.status !== 'IN_PROGRESS' &&
               chore.status !== 'COMPLETED')) && (
             <Card className="mb-6">
-              <h2 className="mb-2 text-xl font-semibold text-gray-900 dark:text-slate-50">Chat</h2>
-              <p className="text-sm text-gray-600 dark:text-slate-400">
+              <h2 className="mb-2 text-xl font-semibold text-slate-800 dark:text-slate-100">Chat</h2>
+              <p className="text-sm text-slate-500 dark:text-slate-400">
                 Chat becomes available once the chore has been assigned to a worker.
               </p>
             </Card>

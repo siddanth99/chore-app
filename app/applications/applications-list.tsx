@@ -28,8 +28,8 @@ export default function ApplicationsList({ applications }: ApplicationsListProps
     <div className="min-h-screen bg-gray-50 dark:bg-slate-950 py-12 px-4 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-4xl">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-slate-50">My Applications</h1>
-          <p className="mt-2 text-sm text-gray-600 dark:text-slate-400">
+          <h1 className="text-3xl font-bold text-slate-900 dark:text-slate-50">My Applications</h1>
+          <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
             View all the chores you've applied for
           </p>
         </div>
@@ -38,7 +38,7 @@ export default function ApplicationsList({ applications }: ApplicationsListProps
           <Card className="text-center">
             <div className="py-12">
               <div className="text-5xl mb-4">📝</div>
-              <p className="text-gray-500 dark:text-slate-400 mb-4">You haven't applied for any chores yet.</p>
+              <p className="text-slate-500 dark:text-slate-400 mb-4">You haven't applied for any chores yet.</p>
               <Link href="/chores">
                 <Button variant="primary">Browse Chores</Button>
               </Link>
@@ -55,11 +55,11 @@ export default function ApplicationsList({ applications }: ApplicationsListProps
                   <div className="flex-1">
                     <Link
                       href={`/chores/${app.chore.id}`}
-                      className="text-xl font-semibold text-gray-900 dark:text-slate-50 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                      className="text-xl font-semibold text-slate-900 dark:text-slate-50 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
                     >
                       {app.chore.title}
                     </Link>
-                    <p className="mt-1 text-sm text-gray-600 dark:text-slate-300 line-clamp-2">
+                    <p className="mt-1 text-sm text-slate-700 dark:text-slate-300 line-clamp-2">
                       {app.chore.description}
                     </p>
                   </div>
@@ -78,22 +78,22 @@ export default function ApplicationsList({ applications }: ApplicationsListProps
 
                 <div className="grid grid-cols-2 gap-4 mb-4 text-sm">
                   <div>
-                    <span className="text-gray-500 dark:text-slate-400">Posted by:</span>
-                    <span className="ml-2 text-gray-900 dark:text-slate-50">{app.chore.createdBy.name}</span>
+                    <span className="text-slate-500 dark:text-slate-400">Posted by:</span>
+                    <span className="ml-2 text-slate-900 dark:text-slate-50">{app.chore.createdBy.name}</span>
                   </div>
                   <div>
-                    <span className="text-gray-500 dark:text-slate-400">Type:</span>
-                    <span className="ml-2 text-gray-900 dark:text-slate-50">{app.chore.type}</span>
+                    <span className="text-slate-500 dark:text-slate-400">Type:</span>
+                    <span className="ml-2 text-slate-900 dark:text-slate-50">{app.chore.type}</span>
                   </div>
                   {app.chore.budget && (
                     <div>
-                      <span className="text-gray-500 dark:text-slate-400">Budget:</span>
-                      <span className="ml-2 text-gray-900 dark:text-slate-50">${app.chore.budget}</span>
+                      <span className="text-slate-500 dark:text-slate-400">Budget:</span>
+                      <span className="ml-2 text-slate-900 dark:text-slate-50">${app.chore.budget}</span>
                     </div>
                   )}
                   <div>
-                    <span className="text-gray-500 dark:text-slate-400">Applied:</span>
-                    <span className="ml-2 text-gray-900 dark:text-slate-50">
+                    <span className="text-slate-500 dark:text-slate-400">Applied:</span>
+                    <span className="ml-2 text-slate-900 dark:text-slate-50">
                       {new Date(app.createdAt).toLocaleDateString()}
                     </span>
                   </div>
@@ -101,14 +101,14 @@ export default function ApplicationsList({ applications }: ApplicationsListProps
 
                   {app.bidAmount && (
                     <div className="mb-2">
-                      <span className="text-sm font-medium text-gray-700 dark:text-slate-300">Your Bid:</span>
-                      <span className="ml-2 text-sm text-gray-900 dark:text-slate-50">${app.bidAmount}</span>
+                      <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Your Bid:</span>
+                      <span className="ml-2 text-sm text-slate-900 dark:text-slate-50">${app.bidAmount}</span>
                     </div>
                   )}
 
                   {app.message && (
                     <div className="mb-4">
-                      <p className="text-sm text-gray-600 dark:text-slate-300">{app.message}</p>
+                      <p className="text-sm text-slate-700 dark:text-slate-300">{app.message}</p>
                     </div>
                   )}
 
@@ -119,7 +119,7 @@ export default function ApplicationsList({ applications }: ApplicationsListProps
                           ? 'text-blue-600 dark:text-blue-400'
                           : app.chore.status === 'COMPLETED'
                           ? 'text-green-600 dark:text-green-400'
-                          : 'text-gray-600 dark:text-slate-400'
+                          : 'text-slate-500 dark:text-slate-400'
                       }`}
                     >
                       Chore Status: {app.chore.status.replace('_', ' ')}
