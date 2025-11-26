@@ -4,12 +4,14 @@ import { getCurrentUser } from '@/server/auth/role'
 import {
   listPublishedChoresWithFilters,
   getChoresWithinDistance,
+  getUniqueCategories,
 } from '@/server/api/chores'
 import ChoresListClient from './chores-list-client'
 
 type RawSearchParams = {
   type?: string
   location?: string
+  category?: string
   workerLat?: string
   workerLng?: string
   distanceKm?: string
@@ -23,7 +25,7 @@ export default async function ChoresPage({
   // Next 15/16: searchParams is a Promise
   const resolved = await searchParams
 
-  const filters: { type?: ChoreType; location?: string } = {}
+  const filters: { type?: ChoreType; location?: string; category?: string } = {}
 
   if (resolved.type === 'ONLINE' || resolved.type === 'OFFLINE') {
     filters.type = resolved.type as ChoreType
@@ -31,6 +33,10 @@ export default async function ChoresPage({
 
   if (resolved.location) {
     filters.location = resolved.location
+  }
+
+  if (resolved.category) {
+    filters.category = resolved.category
   }
 
   const user = await getCurrentUser()
@@ -52,18 +58,13 @@ export default async function ChoresPage({
     workerLng <= 180 &&
     distanceKm >= 0
 
-  let chores: any[] = []
-
-  if (isDistanceFilterActive) {
-    chores = await getChoresWithinDistance(
-      workerLat,
-      workerLng,
-      distanceKm,
-      excludeUserId,
-    )
-  } else {
-    chores = await listPublishedChoresWithFilters(filters, excludeUserId)
-  }
+  // Fetch chores and categories in parallel
+  const [chores, categories] = await Promise.all([
+    isDistanceFilterActive
+      ? getChoresWithinDistance(workerLat, workerLng, distanceKm, excludeUserId)
+      : listPublishedChoresWithFilters(filters, excludeUserId),
+    getUniqueCategories(),
+  ])
 
   return (
     <ChoresListClient
@@ -73,6 +74,7 @@ export default async function ChoresPage({
       initialWorkerLat={!Number.isNaN(workerLat) ? workerLat : null}
       initialWorkerLng={!Number.isNaN(workerLng) ? workerLng : null}
       initialDistanceKm={!Number.isNaN(distanceKm) ? distanceKm : 10}
+      availableCategories={categories}
     />
   )
 }

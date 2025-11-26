@@ -79,7 +79,7 @@ export async function getChoreById(id: string) {
 
 // List published chores with simple filters
 export async function listPublishedChoresWithFilters(
-  filters: { type?: ChoreType; location?: string },
+  filters: { type?: ChoreType; location?: string; category?: string },
   excludeUserId?: string,
 ) {
   const where: any = {
@@ -93,6 +93,14 @@ export async function listPublishedChoresWithFilters(
   if (filters.location) {
     where.locationAddress = {
       contains: filters.location,
+      mode: 'insensitive',
+    }
+  }
+
+  // Filter by category (case-insensitive partial match)
+  if (filters.category) {
+    where.category = {
+      contains: filters.category,
       mode: 'insensitive',
     }
   }
@@ -117,6 +125,17 @@ export async function listPublishedChoresWithFilters(
   })
 
   return chores
+}
+
+// Get all unique categories from published chores
+export async function getUniqueCategories(): Promise<string[]> {
+  const chores = await prisma.chore.findMany({
+    where: { status: ChoreStatus.PUBLISHED },
+    select: { category: true },
+    distinct: ['category'],
+    orderBy: { category: 'asc' },
+  })
+  return chores.map((c) => c.category)
 }
 
 /** ---------- Status helpers (start / complete) ---------- */

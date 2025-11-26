@@ -1,7 +1,50 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { UserRole } from '@prisma/client'
-import { requireRole } from '@/server/auth/role'
-import { createChore } from '@/server/api/chores'
+import { UserRole, ChoreType } from '@prisma/client'
+import { requireRole, getCurrentUser } from '@/server/auth/role'
+import { createChore, listPublishedChoresWithFilters, getUniqueCategories } from '@/server/api/chores'
+
+// GET /api/chores -> list published chores with optional filters
+export async function GET(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url)
+    
+    // Parse filter params
+    const typeParam = searchParams.get('type')
+    const location = searchParams.get('location')
+    const category = searchParams.get('category')
+    
+    // Build filters object
+    const filters: { type?: ChoreType; location?: string; category?: string } = {}
+    
+    if (typeParam === 'ONLINE' || typeParam === 'OFFLINE') {
+      filters.type = typeParam as ChoreType
+    }
+    
+    if (location) {
+      filters.location = location
+    }
+    
+    if (category) {
+      filters.category = category
+    }
+    
+    // Get current user to exclude their own chores if they're a worker
+    const user = await getCurrentUser()
+    const excludeUserId = user?.role === 'WORKER' ? user.id : undefined
+    
+    const chores = await listPublishedChoresWithFilters(filters, excludeUserId)
+    
+    return NextResponse.json({ chores })
+  } catch (error) {
+    console.error('Error fetching chores:', error)
+    return NextResponse.json(
+      { error: 'Failed to fetch chores' },
+      { status: 500 }
+    )
+  }
+}
+
+// GET /api/chores/categories -> get unique categories (separate endpoint would be cleaner but adding here for simplicity)
 
 // POST /api/chores -> create a new chore (CUSTOMER only)
 export async function POST(request: NextRequest) {

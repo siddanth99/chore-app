@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { ChoreStatus, ChoreType } from '@prisma/client'
@@ -12,10 +12,11 @@ import Card from '@/components/ui/Card'
 interface ChoresListClientProps {
   chores: any[]
   user: any
-  initialFilters: { type?: ChoreType; location?: string }
+  initialFilters: { type?: ChoreType; location?: string; category?: string }
   initialWorkerLat?: number | null
   initialWorkerLng?: number | null
   initialDistanceKm?: number
+  availableCategories?: string[]
 }
 
 // Helper function to get status badge variant
@@ -77,14 +78,46 @@ export default function ChoresListClient({
   initialWorkerLat,
   initialWorkerLng,
   initialDistanceKm = 10,
+  availableCategories = [],
 }: ChoresListClientProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [typeFilter, setTypeFilter] = useState<string>(initialFilters.type || 'ALL')
   const [locationFilter, setLocationFilter] = useState<string>(initialFilters.location || '')
+  const [categoryFilter, setCategoryFilter] = useState<string>(initialFilters.category || '')
   const [workerLat, setWorkerLat] = useState<number | null>(initialWorkerLat || null)
   const [workerLng, setWorkerLng] = useState<number | null>(initialWorkerLng || null)
   const [distanceKm, setDistanceKm] = useState<number>(initialDistanceKm)
+  
+  /**
+   * Slider visibility state - intentionally separate from filter state.
+   * 
+   * WHY THIS SEPARATION EXISTS:
+   * - The location slider visibility is a UI concern, not a filter value.
+   * - We do NOT restore slider visibility from persisted filters (URL/localStorage)
+   *   to prevent unexpected auto-show behavior on page refresh.
+   * - The slider should only open via explicit user action:
+   *   1. User toggles the Offline filter ON (during current session)
+   *   2. User manually toggles "Show location slider" ON
+   * 
+   * This ensures deterministic, user-controlled behavior on every page load.
+   */
+  const [showLocationSlider, setShowLocationSlider] = useState<boolean>(false)
+  
+  /**
+   * Tracks whether the user has toggled the Offline filter during this session.
+   * This prevents the slider from auto-opening when the page loads with a 
+   * persisted Offline filter from URL params or localStorage.
+   * 
+   * The ref starts as false and is set to true only when handleTypeFilterChange
+   * is called from an actual user interaction (onChange event).
+   */
+  const hasUserToggledOfflineThisSession = useRef<boolean>(false)
+  
+  /**
+   * Reference to the slider element for focus management (accessibility).
+   */
+  const sliderRef = useRef<HTMLDivElement>(null)
 
   // Sync state with URL params on mount/change (only when URL actually changes)
   useEffect(() => {
@@ -134,6 +167,11 @@ export default function ChoresListClient({
       params.set('location', locationFilter)
     }
     
+    // Add category filter (use encodeURIComponent for safety)
+    if (categoryFilter) {
+      params.set('category', categoryFilter)
+    }
+    
     // Add worker location and distance if available (for WORKER role)
     if (user?.role === 'WORKER' && workerLat !== null && workerLng !== null) {
       params.set('workerLat', workerLat.toString())
@@ -156,11 +194,76 @@ export default function ChoresListClient({
       if (locationFilter) {
         params.set('location', locationFilter)
       }
+      if (categoryFilter) {
+        params.set('category', categoryFilter)
+      }
       params.set('workerLat', lat.toString())
       params.set('workerLng', lng.toString())
       params.set('distanceKm', distanceKm.toString())
       router.push(`/chores?${params.toString()}`)
     }
+  }
+
+  /**
+   * Handler for the type filter dropdown.
+   * When user explicitly selects OFFLINE, auto-open the location slider.
+   * This is a user-initiated action, so we mark it in the session ref.
+   */
+  const handleTypeFilterChange = (newType: string) => {
+    setTypeFilter(newType)
+    
+    // Mark that user has interacted with offline toggle this session
+    if (newType === 'OFFLINE') {
+      hasUserToggledOfflineThisSession.current = true
+      // Auto-open slider when user explicitly toggles Offline ON
+      setShowLocationSlider(true)
+      // Focus the slider for accessibility after a brief delay
+      setTimeout(() => {
+        sliderRef.current?.focus()
+      }, 100)
+    }
+    // Note: When switching away from OFFLINE, we intentionally do NOT auto-close
+    // the slider. The user can close it manually via the "Show location slider" toggle.
+  }
+
+  /**
+   * Handler for the manual "Show location slider" toggle.
+   * This gives the user full control over slider visibility independent of filters.
+   */
+  const handleShowLocationSliderToggle = (checked: boolean) => {
+    setShowLocationSlider(checked)
+    if (checked) {
+      // Focus the slider for accessibility
+      setTimeout(() => {
+        sliderRef.current?.focus()
+      }, 100)
+    }
+  }
+
+  /**
+   * Handler for clearing filters.
+   * Resets all filter values but does NOT change slider visibility.
+   * The "Show location slider" toggle remains the authoritative control
+   * for closing the slider - clearing filters should not hide it.
+   */
+  const handleClearFilters = () => {
+    setTypeFilter('ALL')
+    setLocationFilter('')
+    setCategoryFilter('')
+    setWorkerLat(null)
+    setWorkerLng(null)
+    setDistanceKm(10)
+    // Note: We intentionally do NOT reset showLocationSlider here.
+    // The slider visibility is controlled separately by the manual toggle.
+    router.push('/chores')
+  }
+
+  /**
+   * Callback for the slider's close action (if the slider has an internal close button).
+   * Syncs the manual toggle state when slider is closed from within.
+   */
+  const handleSliderClose = () => {
+    setShowLocationSlider(false)
   }
 
   return (
@@ -177,12 +280,29 @@ export default function ChoresListClient({
           )}
         </div>
 
-        {/* Worker Location Picker - Only for WORKER role */}
-        {user?.role === 'WORKER' && (
-          <Card className="mb-6">
-            <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100 mb-4">
-              Set Your Location
-            </h2>
+        {/* Worker Location Picker - Only for WORKER role and when slider is visible */}
+        {user?.role === 'WORKER' && showLocationSlider && (
+          <Card 
+            className="mb-6"
+            ref={sliderRef}
+            tabIndex={-1}
+            aria-label="Location settings panel"
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100">
+                Set Your Location
+              </h2>
+              <button
+                type="button"
+                onClick={handleSliderClose}
+                className="text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 transition-colors"
+                aria-label="Close location slider"
+              >
+                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
             <WorkerLocationPicker
               onLocationChange={handleLocationChange}
               initialLat={workerLat}
@@ -194,7 +314,13 @@ export default function ChoresListClient({
         {/* Filters */}
         <Card className="mb-6">
           <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100 mb-4">Filter Chores</h2>
-          <div className={`grid gap-4 ${user?.role === 'WORKER' && workerLat && workerLng ? 'sm:grid-cols-2 lg:grid-cols-5' : 'sm:grid-cols-2 lg:grid-cols-4'}`}>
+          <div className={`grid gap-4 ${
+            user?.role === 'WORKER' && showLocationSlider && workerLat && workerLng 
+              ? 'sm:grid-cols-2 lg:grid-cols-7' // Type, Location, Category, Distance, Toggle, Apply, Clear
+              : user?.role === 'WORKER'
+              ? 'sm:grid-cols-2 lg:grid-cols-6' // Type, Location, Category, Toggle, Apply, Clear
+              : 'sm:grid-cols-2 lg:grid-cols-5' // Type, Location, Category, Apply, Clear (non-worker)
+          }`}>
             <div>
               <label
                 htmlFor="typeFilter"
@@ -205,7 +331,7 @@ export default function ChoresListClient({
               <select
                 id="typeFilter"
                 value={typeFilter}
-                onChange={(e) => setTypeFilter(e.target.value)}
+                onChange={(e) => handleTypeFilterChange(e.target.value)}
                 className="block w-full rounded-md border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-slate-700 dark:text-slate-300 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 sm:text-sm"
               >
                 <option value="ALL">All Types</option>
@@ -229,8 +355,30 @@ export default function ChoresListClient({
                 className="block w-full rounded-md border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-slate-700 dark:text-slate-300 placeholder-gray-400 dark:placeholder-slate-500 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 sm:text-sm"
               />
             </div>
-            {/* Distance Filter - Only for WORKER with location set */}
-            {user?.role === 'WORKER' && workerLat && workerLng && (
+            {/* Category Filter */}
+            <div>
+              <label
+                htmlFor="categoryFilter"
+                className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2"
+              >
+                Category
+              </label>
+              <select
+                id="categoryFilter"
+                value={categoryFilter}
+                onChange={(e) => setCategoryFilter(e.target.value)}
+                className="block w-full rounded-md border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-slate-700 dark:text-slate-300 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 sm:text-sm"
+              >
+                <option value="">All Categories</option>
+                {availableCategories.map((cat) => (
+                  <option key={cat} value={cat}>
+                    {cat}
+                  </option>
+                ))}
+              </select>
+            </div>
+            {/* Distance Filter - Only for WORKER with location set and slider visible */}
+            {user?.role === 'WORKER' && showLocationSlider && workerLat && workerLng && (
               <div>
                 <label
                   htmlFor="distanceFilter"
@@ -254,6 +402,26 @@ export default function ChoresListClient({
                 </div>
               </div>
             )}
+            {/* Manual "Show location slider" toggle - only for WORKER role */}
+            {user?.role === 'WORKER' && (
+              <div className="flex items-end">
+                <label className="flex items-center gap-2 cursor-pointer w-full">
+                  <input
+                    type="checkbox"
+                    checked={showLocationSlider}
+                    onChange={(e) => handleShowLocationSliderToggle(e.target.checked)}
+                    className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                    aria-describedby="location-slider-description"
+                  />
+                  <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                    Show location slider
+                  </span>
+                  <span id="location-slider-description" className="sr-only">
+                    Toggle to show or hide the location picker and distance filter
+                  </span>
+                </label>
+              </div>
+            )}
             <div className="flex items-end">
               <Button
                 onClick={handleFilterChange}
@@ -265,14 +433,7 @@ export default function ChoresListClient({
             </div>
             <div className="flex items-end">
               <Button
-                onClick={() => {
-                  setTypeFilter('ALL')
-                  setLocationFilter('')
-                  setWorkerLat(null)
-                  setWorkerLng(null)
-                  setDistanceKm(10)
-                  router.push('/chores')
-                }}
+                onClick={handleClearFilters}
                 variant="secondary"
                 className="w-full"
               >
@@ -437,4 +598,106 @@ export default function ChoresListClient({
     </div>
   )
 }
+
+/**
+ * =============================================================================
+ * MANUAL TEST PLAN - Location Slider Behavior
+ * =============================================================================
+ * 
+ * 1. Fresh page load - slider must be CLOSED:
+ *    - Open /chores in a new tab (or hard refresh)
+ *    - Verify the "Set Your Location" card is NOT visible
+ *    - Verify the distance slider is NOT visible in the filters
+ * 
+ * 2. Offline toggle auto-opens slider:
+ *    - From a fresh page, change Type dropdown to "Offline"
+ *    - Verify the "Set Your Location" card appears automatically
+ *    - Verify the "Show location slider" checkbox becomes checked
+ * 
+ * 3. Clear Filters does NOT close slider:
+ *    - With slider open (from step 2), click "Clear Filters"
+ *    - Verify the slider remains visible
+ *    - Verify the "Show location slider" checkbox is still checked
+ *    - Verify Type is reset to "All Types"
+ * 
+ * 4. Manual toggle closes slider:
+ *    - With slider open, uncheck "Show location slider"
+ *    - Verify the slider closes (card disappears)
+ *    - Verify distance slider in filters also disappears
+ * 
+ * 5. Page refresh with persisted Offline - slider stays CLOSED:
+ *    - Set Type to "Offline" and Apply Filters (URL now has ?type=OFFLINE)
+ *    - Refresh the page
+ *    - Verify the slider is NOT visible (even though Offline is selected)
+ *    - The URL param should persist but slider shouldn't auto-open
+ * 
+ * 6. Re-toggle Offline after refresh opens slider:
+ *    - After step 5, the page has ?type=OFFLINE but slider is closed
+ *    - Change Type to "All Types", then back to "Offline"
+ *    - Verify the slider opens (because user explicitly toggled it)
+ * 
+ * 7. Manual toggle works independently:
+ *    - Start with Type = "All Types" (default)
+ *    - Check "Show location slider" checkbox
+ *    - Verify the slider opens
+ *    - Change Type to "Online" - slider should remain open
+ *    - Uncheck "Show location slider" - slider should close
+ * 
+ * =============================================================================
+ * EXAMPLE RTL TEST (if using React Testing Library):
+ * =============================================================================
+ * 
+ * ```typescript
+ * import { render, screen, fireEvent } from '@testing-library/react'
+ * import ChoresListClient from './chores-list-client'
+ * 
+ * // Mock next/navigation
+ * jest.mock('next/navigation', () => ({
+ *   useRouter: () => ({ push: jest.fn() }),
+ *   useSearchParams: () => new URLSearchParams(),
+ * }))
+ * 
+ * describe('ChoresListClient - Location Slider', () => {
+ *   const defaultProps = {
+ *     chores: [],
+ *     user: { role: 'WORKER', id: '1' },
+ *     initialFilters: {},
+ *   }
+ * 
+ *   it('slider is closed by default on mount', () => {
+ *     render(<ChoresListClient {...defaultProps} />)
+ *     expect(screen.queryByText('Set Your Location')).not.toBeInTheDocument()
+ *   })
+ * 
+ *   it('slider opens when Offline is selected', () => {
+ *     render(<ChoresListClient {...defaultProps} />)
+ *     const typeSelect = screen.getByLabelText('Type')
+ *     fireEvent.change(typeSelect, { target: { value: 'OFFLINE' } })
+ *     expect(screen.getByText('Set Your Location')).toBeInTheDocument()
+ *   })
+ * 
+ *   it('slider persists after Clear Filters', () => {
+ *     render(<ChoresListClient {...defaultProps} />)
+ *     // Open slider
+ *     fireEvent.change(screen.getByLabelText('Type'), { target: { value: 'OFFLINE' } })
+ *     expect(screen.getByText('Set Your Location')).toBeInTheDocument()
+ *     // Clear filters
+ *     fireEvent.click(screen.getByText('Clear Filters'))
+ *     // Slider should still be visible
+ *     expect(screen.getByText('Set Your Location')).toBeInTheDocument()
+ *   })
+ * 
+ *   it('manual toggle controls slider visibility', () => {
+ *     render(<ChoresListClient {...defaultProps} />)
+ *     const toggle = screen.getByLabelText(/show location slider/i)
+ *     // Open via toggle
+ *     fireEvent.click(toggle)
+ *     expect(screen.getByText('Set Your Location')).toBeInTheDocument()
+ *     // Close via toggle
+ *     fireEvent.click(toggle)
+ *     expect(screen.queryByText('Set Your Location')).not.toBeInTheDocument()
+ *   })
+ * })
+ * ```
+ */
 
