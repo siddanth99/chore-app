@@ -1,9 +1,15 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist, Geist_Mono, Inter } from "next/font/google";
 import { Providers } from "@/components/providers";
-import Navbar from "@/components/navbar";
+import Header from "@/components/landing/Header";
 import "leaflet/dist/leaflet.css";
 import "./globals.css";
+
+const inter = Inter({
+  variable: "--font-inter",
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700", "800"],
+});
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -29,15 +35,12 @@ export default function RootLayout({
     <html
       lang="en"
       suppressHydrationWarning
-      // 👇 theme classes live on <html>, so next-themes can toggle them
-      className="bg-gray-50 text-slate-700 dark:bg-slate-950 dark:text-slate-300"
     >
       <body
-        // 👇 fonts + general typography live on <body>
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        className={`${inter.variable} ${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         <Providers>
-          <Navbar />
+          <Header />
           <main className="min-h-screen">
             {children}
           </main>

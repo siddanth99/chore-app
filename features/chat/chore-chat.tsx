@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import Button from '@/components/ui/Button'
+import Button from '@/components/ui/button'
 
 interface ChoreChatProps {
   choreId: string

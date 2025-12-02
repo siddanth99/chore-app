@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { ChoreStatus, ChoreType } from '@prisma/client'
 import Badge from '@/components/ui/Badge'
 import Card from '@/components/ui/Card'
-import Button from '@/components/ui/Button'
+import Button from '@/components/ui/button'
 
 interface DashboardChoreCardProps {
   chore: any

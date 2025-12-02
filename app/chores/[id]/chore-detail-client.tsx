@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { ChoreStatus, ChoreType } from '@prisma/client'
 import ChoreChat from '@/features/chat/chore-chat'
 import MapPreview from '@/components/MapPreview'
-import Button from '@/components/ui/Button'
+import Button from '@/components/ui/button'
 import Badge from '@/components/ui/Badge'
 import Card from '@/components/ui/Card'
 

@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { useSession, signOut } from 'next-auth/react'
 import ThemeToggle from '@/components/theme/ThemeToggle'
 import NotificationsBell from '@/components/notifications/NotificationsBell'
-import Button from '@/components/ui/Button'
+import Button from '@/components/ui/button'
 
 export default function Navbar() {
   const { data: session } = useSession()
