@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { ChoreStatus, ChoreType } from '@prisma/client'
 import WorkerLocationPicker from '@/components/WorkerLocationPicker'
-import Button from '@/components/ui/Button'
+import Button from '@/components/ui/button'
 import Badge from '@/components/ui/Badge'
 import Card from '@/components/ui/Card'
 

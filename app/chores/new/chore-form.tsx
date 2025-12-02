@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { ChoreStatus } from '@prisma/client'
 import MapPicker from '@/components/MapPicker'
-import Button from '@/components/ui/Button'
+import Button from '@/components/ui/button'
 import Card from '@/components/ui/Card'
 
 interface ChoreFormProps {

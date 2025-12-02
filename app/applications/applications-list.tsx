@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { ApplicationStatus } from '@prisma/client'
 import Card from '@/components/ui/Card'
 import Badge from '@/components/ui/Badge'
-import Button from '@/components/ui/Button'
+import Button from '@/components/ui/button'
 
 interface ApplicationsListProps {
   applications: any[]

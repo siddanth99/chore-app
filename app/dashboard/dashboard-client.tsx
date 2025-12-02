@@ -7,7 +7,7 @@ import DashboardStatCard from '@/components/dashboard/DashboardStatCard'
 import DashboardSection from '@/components/dashboard/DashboardSection'
 import DashboardChoreCard from '@/components/dashboard/DashboardChoreCard'
 import LogoutButton from './logout-button'
-import Button from '@/components/ui/Button'
+import Button from '@/components/ui/button'
 import Card from '@/components/ui/Card'
 import Badge from '@/components/ui/Badge'
 

@@ -4,6 +4,7 @@ import React from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useSession, signIn, signOut } from 'next-auth/react';
+import { useTheme } from 'next-themes';
 import Button from '@/components/ui/button';
 
 const Logo = () => (
@@ -34,18 +35,49 @@ const MenuIcon = () => (
   </svg>
 );
 
-interface HeaderProps {
-  isDark?: boolean;
-  onToggleTheme?: () => void;
-}
+const BellIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+    <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+  </svg>
+);
 
-export function Header({ isDark, onToggleTheme }: HeaderProps) {
+const UserIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+    <circle cx="12" cy="7" r="4" />
+  </svg>
+);
+
+export function Header() {
   const { data: session, status } = useSession();
   const router = useRouter();
+  const { theme, setTheme, systemTheme } = useTheme();
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
+  const [mounted, setMounted] = React.useState(false);
+
+  // Stub for unread notifications count - replace with real data
+  const unreadCount = 0;
+
+  // Avoid hydration mismatch
+  React.useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const currentTheme = theme === 'system' ? systemTheme : theme;
+  const isDark = currentTheme === 'dark';
+
+  const toggleTheme = () => {
+    setTheme(isDark ? 'light' : 'dark');
+  };
 
   const handlePostChore = () => {
     router.push('/chores/new');
+  };
+
+  const handleOpenNotifications = () => {
+    // TODO: openNotifications() - navigate to notifications page or open modal
+    router.push('/notifications');
   };
 
   const navItems = [
@@ -78,15 +110,31 @@ export function Header({ isDark, onToggleTheme }: HeaderProps) {
           </nav>
 
           {/* Actions */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             {/* Theme Toggle */}
-            {onToggleTheme && (
+            {mounted && (
               <button
-                onClick={onToggleTheme}
+                onClick={toggleTheme}
                 className="p-2 rounded-lg hover:bg-secondary transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
               >
                 {isDark ? <SunIcon /> : <MoonIcon />}
+              </button>
+            )}
+
+            {/* Notifications Bell */}
+            {session && (
+              <button
+                onClick={handleOpenNotifications}
+                className="relative p-2 rounded-lg hover:bg-secondary transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                aria-label="Open notifications"
+              >
+                <BellIcon />
+                {unreadCount > 0 && (
+                  <span className="absolute top-1 right-1 flex h-4 w-4 items-center justify-center rounded-full bg-destructive text-[10px] font-bold text-destructive-foreground">
+                    {unreadCount > 9 ? '9+' : unreadCount}
+                  </span>
+                )}
               </button>
             )}
 
@@ -107,14 +155,24 @@ export function Header({ isDark, onToggleTheme }: HeaderProps) {
               </Button>
             </div>
 
-            {/* Auth buttons */}
+            {/* Auth / Profile Section */}
             {status === 'loading' ? (
               <span className="ml-2 text-sm text-muted-foreground">Loading...</span>
             ) : session ? (
               <div className="hidden sm:flex items-center gap-2">
-                <span className="text-sm text-muted-foreground">
-                  {session.user?.name ?? session.user?.email}
-                </span>
+                {/* Profile Link */}
+                <Link
+                  href="/profile"
+                  className="flex items-center gap-2 p-2 rounded-lg hover:bg-secondary transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <span className="sr-only">Open profile</span>
+                  <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">
+                    <UserIcon />
+                  </div>
+                  <span className="hidden md:inline text-sm text-muted-foreground max-w-[120px] truncate">
+                    {session.user?.name ?? session.user?.email}
+                  </span>
+                </Link>
                 <Button variant="outline" onClick={() => signOut()}>
                   Log out
                 </Button>
@@ -162,9 +220,32 @@ export function Header({ isDark, onToggleTheme }: HeaderProps) {
                 </Button>
                 {session ? (
                   <>
-                    <span className="text-sm text-center text-muted-foreground py-2">
-                      {session.user?.name ?? session.user?.email}
-                    </span>
+                    <Button
+                      variant="ghost"
+                      className="w-full justify-start"
+                      onClick={() => {
+                        setMobileMenuOpen(false);
+                        router.push('/notifications');
+                      }}
+                    >
+                      <BellIcon />
+                      <span className="ml-2">Notifications</span>
+                      {unreadCount > 0 && (
+                        <span className="ml-auto bg-destructive text-destructive-foreground text-xs px-2 py-0.5 rounded-full">
+                          {unreadCount}
+                        </span>
+                      )}
+                    </Button>
+                    <Link
+                      href="/profile"
+                      className="flex items-center w-full px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-secondary rounded-lg transition-colors"
+                      onClick={() => setMobileMenuOpen(false)}
+                    >
+                      <UserIcon />
+                      <span className="ml-2 truncate">
+                        {session.user?.name ?? session.user?.email}
+                      </span>
+                    </Link>
                     <Button variant="outline" className="w-full" onClick={() => signOut()}>
                       Log out
                     </Button>
