@@ -2,6 +2,7 @@
 import { prisma } from '../db/client'
 import { ChoreStatus, CancellationRequestStatus, NotificationType } from '@prisma/client'
 import { createNotification } from './notifications'
+import { maybeSendExternalNotification } from '../notifications'
 
 /**
  * Worker requests cancellation for an assigned/in-progress chore
@@ -81,6 +82,19 @@ export async function requestCancellation(
     message: `${result.chore.assignedWorker?.name || 'The worker'} requested cancellation for "${result.chore.title}"`,
     link: `/chores/${choreId}`,
   })
+
+  // Send external notification to customer (non-blocking)
+  if (process.env.PABBLY_WEBHOOK_URL && result.chore.createdBy?.email) {
+    maybeSendExternalNotification({
+      userId: result.chore.createdById,
+      email: result.chore.createdBy.email,
+      event: 'cancellation.requested',
+      title: 'Cancellation requested',
+      message: `${result.chore.assignedWorker?.name || 'The worker'} requested cancellation for "${result.chore.title}"`,
+      link: `/chores/${choreId}`,
+      meta: { choreId, cancellationRequestId: result.request.id },
+    }).catch((e) => console.error('External notif error', e))
+  }
 
   return result
 }
@@ -193,6 +207,19 @@ export async function decideCancellation(
       message: `"${result.chore.title}" cancellation was ${decision === 'APPROVE' ? 'APPROVED' : 'REJECTED'}`,
       link: `/chores/${choreId}`,
     })
+
+    // Send external notification to worker (non-blocking)
+    if (process.env.PABBLY_WEBHOOK_URL && result.chore.assignedWorker?.email) {
+      maybeSendExternalNotification({
+        userId: result.chore.assignedWorkerId!,
+        email: result.chore.assignedWorker.email,
+        event: 'cancellation.decided',
+        title: 'Cancellation decision',
+        message: `"${result.chore.title}" cancellation was ${decision === 'APPROVE' ? 'APPROVED' : 'REJECTED'}`,
+        link: `/chores/${choreId}`,
+        meta: { choreId, decision, cancellationRequestId: result.request.id },
+      }).catch((e) => console.error('External notif error', e))
+    }
   }
 
   return result

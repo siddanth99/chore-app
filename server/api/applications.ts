@@ -2,6 +2,7 @@
 import { prisma } from '../db/client'
 import { ApplicationStatus, ChoreStatus, NotificationType } from '@prisma/client'
 import { createNotification } from './notifications'
+import { maybeSendExternalNotification } from '../notifications'
 
 export interface CreateApplicationInput {
   choreId: string
@@ -19,6 +20,7 @@ export async function createApplication(input: CreateApplicationInput) {
         select: {
           id: true,
           name: true,
+          email: true,
         },
       },
     },
@@ -71,6 +73,19 @@ export async function createApplication(input: CreateApplicationInput) {
     message: `${worker?.name || 'A worker'} applied to your chore "${chore.title}"`,
     link: `/chores/${chore.id}`,
   })
+
+  // Send external notification (non-blocking)
+  if (process.env.PABBLY_WEBHOOK_URL && chore.createdBy?.email) {
+    maybeSendExternalNotification({
+      userId: chore.createdById,
+      email: chore.createdBy.email,
+      event: 'application.submitted',
+      title: 'New application received',
+      message: `${worker?.name || 'A worker'} applied to your chore "${chore.title}"`,
+      link: `/chores/${chore.id}`,
+      meta: { choreId: chore.id, applicationId: application.id },
+    }).catch((e: any) => console.error('External notif error', e))
+  }
 
   return application
 }
@@ -158,6 +173,19 @@ export async function assignApplication(
     link: `/chores/${application.choreId}`,
   })
 
+  // Send external notification to assigned worker (non-blocking)
+  if (process.env.PABBLY_WEBHOOK_URL && result.application.worker?.email) {
+    maybeSendExternalNotification({
+      userId: application.workerId,
+      email: result.application.worker.email,
+      event: 'chore.assigned',
+      title: "You've been assigned a chore",
+      message: `You've been assigned to "${application.chore.title}"`,
+      link: `/chores/${application.choreId}`,
+      meta: { choreId: application.choreId, applicationId: application.id },
+    }).catch((e: any) => console.error('External notif error', e))
+  }
+
   // Notify rejected workers (optional - can be done in batch)
   const rejectedApplications = await prisma.application.findMany({
     where: {
@@ -169,6 +197,7 @@ export async function assignApplication(
       worker: {
         select: {
           id: true,
+          email: true,
         },
       },
     },
@@ -185,6 +214,19 @@ export async function assignApplication(
       message: `Your application for "${application.chore.title}" was not selected`,
       link: `/chores/${application.choreId}`,
     })
+
+    // Send external notification to rejected worker (non-blocking)
+    if (process.env.PABBLY_WEBHOOK_URL && rejectedApp.worker?.email) {
+      maybeSendExternalNotification({
+        userId: rejectedApp.workerId,
+        email: rejectedApp.worker.email,
+        event: 'application.rejected',
+        title: 'Application not selected',
+        message: `Your application for "${application.chore.title}" was not selected`,
+        link: `/chores/${application.choreId}`,
+        meta: { choreId: application.choreId, applicationId: rejectedApp.id },
+      }).catch((e: any) => console.error('External notif error', e))
+    }
   }
 
   return result

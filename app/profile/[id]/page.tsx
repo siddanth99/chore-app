@@ -1,7 +1,7 @@
 import { getRatingsForUser, getAverageRating } from '@/server/api/ratings'
 import { prisma } from '@/server/db/client'
 import { getCurrentUser } from '@/server/auth/role'
-import ProfileClient from './profile-client'
+import ProfilePublicView from '@/components/profile/ProfilePublicView'
 
 export default async function ProfilePage({
   params,
@@ -68,15 +68,27 @@ export default async function ProfilePage({
     take: 10, // Limit to recent 10
   })
 
-  const currentUser = await getCurrentUser()
+  // Transform ratings to match expected format
+  const formattedRatings = ratings.map((rating) => ({
+    id: rating.id,
+    score: rating.score,
+    comment: rating.comment,
+    createdAt: rating.createdAt,
+    fromUser: {
+      id: rating.fromUser.id,
+      name: rating.fromUser.name,
+    },
+    chore: {
+      id: rating.chore.id,
+      title: rating.chore.title,
+    },
+  }))
 
   return (
-    <ProfileClient
+    <ProfilePublicView
       user={user}
-      ratings={ratings}
+      ratings={formattedRatings}
       averageRating={averageRating}
-      completedChores={completedChores}
-      currentUserId={currentUser?.id}
     />
   )
 }

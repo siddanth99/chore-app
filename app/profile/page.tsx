@@ -1,75 +1,76 @@
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/server/auth/config";
-import { redirect } from "next/navigation";
-import Link from "next/link";
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/server/auth/config'
+import { redirect } from 'next/navigation'
+import { prisma } from '@/server/db/client'
+import { getRatingsForUser, getAverageRating } from '@/server/api/ratings'
+import ProfilePageView from '@/components/profile/ProfilePageView'
+
+export const revalidate = 60
 
 export default async function ProfilePage() {
-  const session = await getServerSession(authOptions);
-  
+  const session = await getServerSession(authOptions)
+
   if (!session) {
-    redirect("/api/auth/signin?callbackUrl=/profile");
+    redirect('/api/auth/signin?callbackUrl=/profile')
   }
 
-  const userId = session.user?.id;
+  const userId = session.user?.id
+
+  if (!userId) {
+    redirect('/api/auth/signin?callbackUrl=/profile')
+  }
+
+  // Fetch user profile data
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      role: true,
+      bio: true,
+      avatarUrl: true,
+      baseLocation: true,
+      createdAt: true,
+      // TODO: Add phone, skills, hourlyRate fields to User model in Prisma schema
+      // For now, these will be undefined/null
+    },
+  })
+
+  if (!user) {
+    redirect('/api/auth/signin?callbackUrl=/profile')
+  }
+
+  // Get ratings
+  const ratings = await getRatingsForUser(user.id)
+  const averageRating = await getAverageRating(user.id)
+
+  // Transform ratings to match expected format
+  const formattedRatings = ratings.map((rating) => ({
+    id: rating.id,
+    score: rating.score,
+    comment: rating.comment,
+    createdAt: rating.createdAt,
+    fromUser: {
+      id: rating.fromUser.id,
+      name: rating.fromUser.name,
+    },
+    chore: {
+      id: rating.chore.id,
+      title: rating.chore.title,
+    },
+  }))
 
   return (
-    <main className="max-w-4xl mx-auto p-6">
-      <h1 className="text-2xl font-semibold mb-4">Your Profile</h1>
-      
-      <div className="grid gap-4">
-        {/* Profile Info Card */}
-        <div className="p-6 rounded-lg bg-secondary/10 border border-border">
-          <div className="flex items-start gap-4">
-            {/* Avatar Placeholder */}
-            <div className="w-16 h-16 rounded-full bg-primary/20 flex items-center justify-center text-2xl font-bold text-primary">
-              {session.user?.name?.[0]?.toUpperCase() ?? session.user?.email?.[0]?.toUpperCase() ?? '?'}
-            </div>
-            
-            <div className="flex-1">
-              <p className="text-lg font-medium">
-                {session.user?.name ?? '—'}
-              </p>
-              <p className="text-muted-foreground">
-                {session.user?.email ?? '—'}
-              </p>
-              
-              {userId && (
-                <Link 
-                  href={`/profile/${userId}`}
-                  className="inline-block mt-3 text-sm text-primary hover:text-primary/80 hover:underline transition-colors"
-                >
-                  View public profile →
-                </Link>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Quick Links */}
-        <div className="p-6 rounded-lg bg-secondary/10 border border-border">
-          <h2 className="text-lg font-medium mb-3">Quick Links</h2>
-          <div className="flex flex-wrap gap-3">
-            <Link 
-              href="/dashboard" 
-              className="px-4 py-2 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors text-sm"
-            >
-              Go to Dashboard
-            </Link>
-            <Link 
-              href="/chores" 
-              className="px-4 py-2 rounded-md bg-secondary text-secondary-foreground hover:bg-secondary/80 transition-colors text-sm"
-            >
-              Browse Chores
-            </Link>
-            <Link 
-              href="/notifications" 
-              className="px-4 py-2 rounded-md bg-secondary text-secondary-foreground hover:bg-secondary/80 transition-colors text-sm"
-            >
-              Notifications
-            </Link>
-          </div>
-        </div>
-      </div>
-    </main>
-  );
+    <ProfilePageView
+      profile={{
+        ...user,
+        phone: undefined, // TODO: Add phone field to User model
+        skills: undefined, // TODO: Add skills field to User model (array or JSON)
+        hourlyRate: undefined, // TODO: Add hourlyRate field to User model
+      }}
+      ratings={formattedRatings}
+      averageRating={averageRating}
+    />
+  )
 }
