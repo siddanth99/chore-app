@@ -1,31 +1,47 @@
 // web/app/api/applications/[applicationId]/assign/route.ts
 import { NextResponse } from 'next/server'
 import { UserRole } from '@prisma/client'
-import { requireRole } from '@/server/auth/role'
+import { requireRole, getHttpStatusForAuthError, isAuthError } from '@/server/auth/role'
 import { assignApplication } from '@/server/api/applications'
 
-// In Next 15, params is a Promise – we model that here
+// In Next 15, params is a Promise
 type AssignParams = Promise<{ applicationId: string }>
 
+/**
+ * POST /api/applications/[applicationId]/assign
+ * Assign a worker to a chore (CUSTOMER only)
+ * Security: customerId always comes from session
+ */
 export async function POST(
   request: Request,
   { params }: { params: AssignParams }
 ) {
   try {
-    // Only CUSTOMERS can assign
+    // RBAC: Only customers can assign
     const user = await requireRole(UserRole.CUSTOMER)
 
-    // 🔑 IMPORTANT: await params before using applicationId
     const { applicationId } = await params
 
+    // Security: customerId comes from session, not from client
     const result = await assignApplication(applicationId, user.id)
 
     return NextResponse.json(result)
   } catch (error: any) {
     console.error('Error assigning application:', error)
+    
+    // Handle structured auth/business errors
+    if (isAuthError(error)) {
+      const status = getHttpStatusForAuthError(error)
+      return NextResponse.json(
+        { error: error.message || 'Operation failed' },
+        { status }
+      )
+    }
+    
+    // Generic 500 for unknown errors (don't leak details)
     return NextResponse.json(
-      { error: error.message ?? 'Failed to assign application' },
-      { status: 400 }
+      { error: 'Internal server error' },
+      { status: 500 }
     )
   }
 }

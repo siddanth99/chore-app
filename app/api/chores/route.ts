@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { UserRole, ChoreType } from '@prisma/client'
-import { requireRole, getCurrentUser } from '@/server/auth/role'
+import { requireRole, getCurrentUser, getHttpStatusForAuthError, isAuthError, AuthorizationError, AUTH_ERRORS } from '@/server/auth/role'
 import { createChore, listPublishedChoresWithFilters, getUniqueCategories } from '@/server/api/chores'
+import { choreCreationLimiter, getRateLimitKey, createRateLimitResponse } from '@/lib/rate-limit'
 
 // GET /api/chores -> list published chores with optional filters
 export async function GET(request: NextRequest) {
@@ -47,10 +48,22 @@ export async function GET(request: NextRequest) {
 // GET /api/chores/categories -> get unique categories (separate endpoint would be cleaner but adding here for simplicity)
 
 // POST /api/chores -> create a new chore (CUSTOMER only)
+// Validation is now handled by Zod in server/api/chores.ts
 export async function POST(request: NextRequest) {
   try {
-    // Only customers can create chores
+    // RBAC: Only customers can create chores
     const user = await requireRole(UserRole.CUSTOMER)
+
+    // Rate limiting: Prevent spam chore creation
+    const rateLimitKey = getRateLimitKey(request, user.id)
+    const { success, reset } = await choreCreationLimiter.limit(rateLimitKey)
+    
+    if (!success) {
+      return NextResponse.json(
+        createRateLimitResponse(reset, 'Rate limit exceeded. You can create more chores later.'),
+        { status: 429 }
+      )
+    }
 
     const body = await request.json()
     const {
@@ -67,33 +80,11 @@ export async function POST(request: NextRequest) {
     } = body
 
     // Normalize imageUrl to string or null, never undefined
-    // Also convert empty strings to null
     const imageUrl = rawImageUrl && typeof rawImageUrl === 'string' && rawImageUrl.trim() 
       ? rawImageUrl.trim() 
       : null
 
-    if (!title || !description || !type || !category) {
-      return NextResponse.json(
-        { error: 'Missing required fields: title, description, type, category' },
-        { status: 400 }
-      )
-    }
-
-    // Validate OFFLINE chores must have coordinates
-    if (type === 'OFFLINE') {
-      if (
-        locationLat === undefined ||
-        locationLat === null ||
-        locationLng === undefined ||
-        locationLng === null
-      ) {
-        return NextResponse.json(
-          { error: 'Location coordinates (latitude and longitude) are required for offline chores' },
-          { status: 400 }
-        )
-      }
-    }
-
+    // Create chore - Zod validation happens inside createChore()
     const chore = await createChore({
       title,
       description,
@@ -104,15 +95,41 @@ export async function POST(request: NextRequest) {
       locationLat: locationLat !== undefined && locationLat !== null ? Number(locationLat) : undefined,
       locationLng: locationLng !== undefined && locationLng !== null ? Number(locationLng) : undefined,
       dueAt: dueAt || undefined,
-      imageUrl: imageUrl, // Already normalized to string | null above
-      createdById: user.id,
+      imageUrl: imageUrl,
+      createdById: user.id, // Always from session
     })
 
     return NextResponse.json({ chore }, { status: 201 })
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error creating chore:', error)
+    
+    // Handle validation errors (INVALID_INPUT from Zod)
+    if (error instanceof AuthorizationError && error.code === AUTH_ERRORS.INVALID_INPUT) {
+      try {
+        const validationErrors = JSON.parse(error.message)
+        return NextResponse.json(
+          { error: 'Validation failed', details: validationErrors },
+          { status: 400 }
+        )
+      } catch {
+        return NextResponse.json(
+          { error: error.message || 'Invalid input' },
+          { status: 400 }
+        )
+      }
+    }
+    
+    // Return proper HTTP status for other auth errors
+    if (isAuthError(error)) {
+      const status = getHttpStatusForAuthError(error)
+      return NextResponse.json(
+        { error: error.message || 'Access denied' },
+        { status }
+      )
+    }
+    
     return NextResponse.json(
-      { error: 'Failed to create chore' },
+      { error: error.message || 'Failed to create chore' },
       { status: 400 }
     )
   }

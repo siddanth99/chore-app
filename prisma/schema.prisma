@@ -20,6 +20,9 @@ model User {
   bio            String?
   avatarUrl      String?
   baseLocation   String?
+  phone          String?
+  skills         Json?    @default("[]")  // JSON array of skill strings
+  hourlyRate     Int?                      // Hourly rate in rupees
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 

@@ -1,25 +1,37 @@
 import { NextResponse } from 'next/server'
 import { UserRole } from '@prisma/client'
-import { requireRole } from '@/server/auth/role'
+import { requireRole, getHttpStatusForAuthError, isAuthError } from '@/server/auth/role'
 import { listApplicationsForWorkerDashboard } from '@/server/api/applications'
 
-// GET /api/applications
-// Returns the current worker's applications for use in the dashboard
+/**
+ * GET /api/applications
+ * Returns the current worker's OWN applications
+ * Security: workerId always comes from session - never allows viewing other workers' applications
+ */
 export async function GET() {
   try {
-    // Only workers should hit this endpoint
+    // RBAC: Only workers can view applications
     const user = await requireRole(UserRole.WORKER)
 
+    // Security: Only returns applications for the session user
     const applications = await listApplicationsForWorkerDashboard(user.id)
 
     return NextResponse.json({ applications })
-  } catch (err: any) {
-    console.error('Error in GET /api/applications:', err)
+  } catch (error: any) {
+    console.error('Error in GET /api/applications:', error)
 
-    // If requireRole threw, it already sent a 401/403 in practice,
-    // but we keep a generic 500 fallback here.
+    // Handle structured auth/business errors
+    if (isAuthError(error)) {
+      const status = getHttpStatusForAuthError(error)
+      return NextResponse.json(
+        { error: error.message || 'Operation failed' },
+        { status }
+      )
+    }
+    
+    // Generic 500 for unknown errors (don't leak details)
     return NextResponse.json(
-      { error: err.message ?? 'Failed to load applications' },
+      { error: 'Internal server error' },
       { status: 500 }
     )
   }

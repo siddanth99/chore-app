@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { formatDate } from '@/lib/utils'
 
 interface Notification {
   id: string
@@ -29,7 +30,7 @@ function formatRelativeTime(dateString: string): string {
   if (diffMins < 60) return `${diffMins} minute${diffMins !== 1 ? 's' : ''} ago`
   if (diffHours < 24) return `${diffHours} hour${diffHours !== 1 ? 's' : ''} ago`
   if (diffDays < 7) return `${diffDays} day${diffDays !== 1 ? 's' : ''} ago`
-  return date.toLocaleDateString()
+  return formatDate(date)
 }
 
 export default function NotificationsBell() {

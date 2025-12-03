@@ -5,6 +5,7 @@ import { ApplicationStatus } from '@prisma/client'
 import Card from '@/components/ui/Card'
 import Badge from '@/components/ui/Badge'
 import Button from '@/components/ui/button'
+import { formatDate } from '@/lib/utils'
 
 interface ApplicationsListProps {
   applications: any[]
@@ -94,7 +95,7 @@ export default function ApplicationsList({ applications }: ApplicationsListProps
                   <div>
                     <span className="text-slate-500 dark:text-slate-400">Applied:</span>
                     <span className="ml-2 text-slate-900 dark:text-slate-50">
-                      {new Date(app.createdAt).toLocaleDateString()}
+                      {formatDate(app.createdAt)}
                     </span>
                   </div>
                 </div>

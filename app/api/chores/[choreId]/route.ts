@@ -1,16 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/server/db/client'
-import { requireAuth } from '@/server/auth/role'
-import { ChoreStatus } from '@prisma/client'
+import { requireAuth, assertOwner, getHttpStatusForAuthError, isAuthError, AuthorizationError, AUTH_ERRORS } from '@/server/auth/role'
+import { ChoreStatus, UserRole } from '@prisma/client'
+import { updateChoreSchema } from '@/lib/validation/chore.schema'
 
 export async function PATCH(
   request: NextRequest,
   context: { params: Promise<{ choreId: string }> }
 ) {
   try {
+    // RBAC: Require authentication
     const user = await requireAuth()
     const { choreId } = await context.params
     const body = await request.json()
+
+    // Validate input with Zod schema (partial update)
+    const parsed = updateChoreSchema.safeParse(body)
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: 'Validation failed', details: parsed.error.flatten() },
+        { status: 400 }
+      )
+    }
+    const validatedInput = parsed.data
 
     // Load chore
     const chore = await prisma.chore.findUnique({
@@ -26,51 +38,43 @@ export async function PATCH(
       return NextResponse.json({ error: 'Chore not found' }, { status: 404 })
     }
 
-    if (chore.createdById !== user.id) {
+    // RBAC: Only the chore owner (CUSTOMER) can edit
+    // Note: Workers cannot edit chores, only view them
+    if (user.role !== UserRole.CUSTOMER) {
       return NextResponse.json(
-        { error: 'Not authorized to edit this chore' },
+        { error: 'Only customers can edit chores' },
         { status: 403 }
       )
     }
+    
+    // RBAC: Assert ownership using the helper
+    assertOwner(user.id, chore.createdById)
 
     // Build allowed update data based on status
     const data: any = {}
     const status = chore.status
 
     if (status === ChoreStatus.DRAFT || status === ChoreStatus.PUBLISHED) {
-      // Allow full edit
-      if (typeof body.title === 'string') data.title = body.title
-      if (typeof body.description === 'string') data.description = body.description
-      if (body.type === 'ONLINE' || body.type === 'OFFLINE') data.type = body.type
-      if (typeof body.category === 'string') data.category = body.category
-      if (body.budget === null || typeof body.budget === 'number')
-        data.budget = body.budget
-      if (
-        typeof body.locationAddress === 'string' ||
-        body.locationAddress === null
-      )
-        data.locationAddress = body.locationAddress
-      if (
-        typeof body.locationLat === 'number' ||
-        body.locationLat === null
-      )
-        data.locationLat = body.locationLat
-      if (
-        typeof body.locationLng === 'number' ||
-        body.locationLng === null
-      )
-        data.locationLng = body.locationLng
-      if (body.dueAt === null || typeof body.dueAt === 'string')
-        data.dueAt = body.dueAt ? new Date(body.dueAt) : null
-      if (typeof body.imageUrl === 'string' || body.imageUrl === null)
-        data.imageUrl = body.imageUrl
+      // Allow full edit - use validated input
+      if (validatedInput.title !== undefined) data.title = validatedInput.title
+      if (validatedInput.description !== undefined) data.description = validatedInput.description
+      if (validatedInput.type !== undefined) data.type = validatedInput.type
+      if (validatedInput.category !== undefined) data.category = validatedInput.category
+      if (validatedInput.budget !== undefined) data.budget = validatedInput.budget
+      if (validatedInput.locationAddress !== undefined) data.locationAddress = validatedInput.locationAddress
+      if (validatedInput.locationLat !== undefined) data.locationLat = validatedInput.locationLat
+      if (validatedInput.locationLng !== undefined) data.locationLng = validatedInput.locationLng
+      if (validatedInput.dueAt !== undefined) {
+        data.dueAt = validatedInput.dueAt ? new Date(validatedInput.dueAt) : null
+      }
+      if (validatedInput.imageUrl !== undefined) data.imageUrl = validatedInput.imageUrl
     } else if (status === ChoreStatus.ASSIGNED) {
       // Only title + description
-      if (typeof body.title === 'string') data.title = body.title
-      if (typeof body.description === 'string') data.description = body.description
+      if (validatedInput.title !== undefined) data.title = validatedInput.title
+      if (validatedInput.description !== undefined) data.description = validatedInput.description
     } else if (status === ChoreStatus.IN_PROGRESS) {
       // Only description
-      if (typeof body.description === 'string') data.description = body.description
+      if (validatedInput.description !== undefined) data.description = validatedInput.description
     } else {
       return NextResponse.json(
         { error: 'This chore cannot be edited in its current status' },
@@ -88,6 +92,32 @@ export async function PATCH(
     return NextResponse.json({ chore: updated })
   } catch (error: any) {
     console.error('Error updating chore:', error)
+    
+    // Handle validation errors (INVALID_INPUT from Zod)
+    if (error instanceof AuthorizationError && error.code === AUTH_ERRORS.INVALID_INPUT) {
+      try {
+        const validationErrors = JSON.parse(error.message)
+        return NextResponse.json(
+          { error: 'Validation failed', details: validationErrors },
+          { status: 400 }
+        )
+      } catch {
+        return NextResponse.json(
+          { error: error.message || 'Invalid input' },
+          { status: 400 }
+        )
+      }
+    }
+    
+    // Return proper HTTP status for auth errors
+    if (isAuthError(error)) {
+      const status = getHttpStatusForAuthError(error)
+      return NextResponse.json(
+        { error: error.message || 'Access denied' },
+        { status }
+      )
+    }
+    
     return NextResponse.json(
       { error: error.message || 'Failed to update chore' },
       { status: 400 }

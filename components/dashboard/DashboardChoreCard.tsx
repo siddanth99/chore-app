@@ -1,4 +1,8 @@
+// TODO: Legacy dashboard UI. Candidate for removal after v2 dashboard is fully verified in production.
+// See components/dashboard/LovableDashboardChoreCard.tsx for the new Lovable UI implementation.
+
 import Link from 'next/link'
+import { formatDate } from '@/lib/utils'
 import { ChoreStatus, ChoreType } from '@prisma/client'
 import Badge from '@/components/ui/Badge'
 import Card from '@/components/ui/Card'
@@ -108,7 +112,7 @@ export default function DashboardChoreCard({
             <div className="flex items-center text-sm text-slate-500 dark:text-slate-400">
               <span className="font-medium">Due:</span>
               <span className="ml-2">
-                {new Date(chore.dueAt).toLocaleDateString()}
+                {formatDate(chore.dueAt)}
               </span>
             </div>
           )}

@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import Card from '@/components/ui/Card'
 import Badge from '@/components/ui/Badge'
+import { formatDate } from '@/lib/utils'
 
 interface ProfileClientProps {
   user: any
@@ -63,7 +64,7 @@ export default function ProfileClient({
             )}
 
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-2">
-            Member since {new Date(user.createdAt).toLocaleDateString()}
+            Member since {formatDate(user.createdAt)}
           </p>
         </Card>
 
@@ -123,7 +124,7 @@ export default function ProfileClient({
                       <p className="text-sm text-slate-700 dark:text-slate-300 mt-2">{rating.comment}</p>
                     )}
                     <p className="text-xs text-slate-500 dark:text-slate-400 mt-2">
-                      {new Date(rating.createdAt).toLocaleDateString()}
+                      {formatDate(rating.createdAt)}
                     </p>
                   </div>
                 ))}
@@ -161,7 +162,7 @@ export default function ProfileClient({
                       )}
                     </div>
                     <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                      Completed on {new Date(chore.updatedAt).toLocaleDateString()}
+                      Completed on {formatDate(chore.updatedAt)}
                     </p>
                   </div>
                 ))}

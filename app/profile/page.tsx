@@ -31,9 +31,10 @@ export default async function ProfilePage() {
       bio: true,
       avatarUrl: true,
       baseLocation: true,
+      phone: true,
+      skills: true,
+      hourlyRate: true,
       createdAt: true,
-      // TODO: Add phone, skills, hourlyRate fields to User model in Prisma schema
-      // For now, these will be undefined/null
     },
   })
 
@@ -61,13 +62,18 @@ export default async function ProfilePage() {
     },
   }))
 
+  // Parse skills from JSON (stored as Json type in Prisma)
+  const parsedSkills = Array.isArray(user.skills) 
+    ? (user.skills as string[]) 
+    : []
+
   return (
     <ProfilePageView
       profile={{
         ...user,
-        phone: undefined, // TODO: Add phone field to User model
-        skills: undefined, // TODO: Add skills field to User model (array or JSON)
-        hourlyRate: undefined, // TODO: Add hourlyRate field to User model
+        phone: user.phone ?? undefined,
+        skills: parsedSkills,
+        hourlyRate: user.hourlyRate ?? undefined,
       }}
       ratings={formattedRatings}
       averageRating={averageRating}

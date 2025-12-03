@@ -8,6 +8,7 @@ import WorkerLocationPicker from '@/components/WorkerLocationPicker'
 import Button from '@/components/ui/button'
 import Badge from '@/components/ui/Badge'
 import Card from '@/components/ui/Card'
+import { formatDate } from '@/lib/utils'
 
 interface ChoresListClientProps {
   chores: any[]
@@ -568,7 +569,7 @@ export default function ChoresListClient({
                       <div className="flex items-center text-sm text-slate-500 dark:text-slate-400">
                         <span className="font-medium">Due:</span>
                         <span className="ml-2">
-                          {new Date(chore.dueAt).toLocaleDateString()}
+                          {formatDate(chore.dueAt)}
                         </span>
                       </div>
                     )}

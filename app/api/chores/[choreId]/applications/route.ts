@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireRole } from '@/server/auth/role'
+import { requireRole, getHttpStatusForAuthError, isAuthError, AuthorizationError, AUTH_ERRORS } from '@/server/auth/role'
 import { UserRole } from '@prisma/client'
 import { createApplication } from '@/server/api/applications'
+import { applicationCreationLimiter, getRateLimitKey, createRateLimitResponse } from '@/lib/rate-limit'
 
 // Next.js 14+ — dynamic route params are a Promise and must be awaited
 export async function POST(
@@ -9,8 +10,19 @@ export async function POST(
   context: { params: Promise<{ choreId: string }> }
 ) {
   try {
-    // Ensure only workers can apply
+    // RBAC: Only workers can apply to chores
     const user = await requireRole(UserRole.WORKER)
+
+    // Rate limiting: Prevent spam applications
+    const rateLimitKey = getRateLimitKey(request, user.id)
+    const { success, reset } = await applicationCreationLimiter.limit(rateLimitKey)
+    
+    if (!success) {
+      return NextResponse.json(
+        createRateLimitResponse(reset, 'Rate limit exceeded. You can apply to more chores later.'),
+        { status: 429 }
+      )
+    }
 
     // ✅ unwrap params promise
     const { choreId } = await context.params
@@ -22,7 +34,7 @@ export async function POST(
     const body = await request.json()
     const { bidAmount, message } = body
 
-    // Create application
+    // Create application (includes RBAC check for self-application)
     const application = await createApplication({
       choreId,
       workerId: user.id,
@@ -34,10 +46,37 @@ export async function POST(
     })
 
     return NextResponse.json({ application }, { status: 201 })
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error creating application:', error)
+    
+    // Handle validation errors (INVALID_INPUT from Zod)
+    if (error instanceof AuthorizationError && error.code === AUTH_ERRORS.INVALID_INPUT) {
+      try {
+        const validationErrors = JSON.parse(error.message)
+        return NextResponse.json(
+          { error: 'Validation failed', details: validationErrors },
+          { status: 400 }
+        )
+      } catch {
+        return NextResponse.json(
+          { error: error.message || 'Invalid input' },
+          { status: 400 }
+        )
+      }
+    }
+    
+    // Return proper HTTP status for other auth errors
+    if (isAuthError(error)) {
+      const status = getHttpStatusForAuthError(error)
+      return NextResponse.json(
+        { error: error.message || 'Access denied' },
+        { status }
+      )
+    }
+    
+    // Business logic errors (already applied, chore not found, etc.)
     return NextResponse.json(
-      { error: 'Failed to create application' },
+      { error: error.message || 'Failed to create application' },
       { status: 400 }
     )
   }
