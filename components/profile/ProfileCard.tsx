@@ -36,6 +36,14 @@ export default function ProfileCard({
     .toUpperCase()
     .slice(0, 2)
 
+  // Deterministic date formatting to avoid SSR/CSR hydration mismatch
+  const date = typeof createdAt === 'string' ? new Date(createdAt) : createdAt
+  const formattedDate = date.toLocaleDateString('en-GB', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  })
+
   return (
     <Card className="mb-6">
       <div className="flex items-start gap-4 mb-4">
@@ -103,7 +111,7 @@ export default function ProfileCard({
           </div>
 
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-3">
-            Member since {new Date(createdAt).toLocaleDateString()}
+            Member since {formattedDate}
           </p>
 
           <Link
