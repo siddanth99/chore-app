@@ -3,9 +3,27 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { ChoreStatus } from '@prisma/client'
+import { motion } from 'framer-motion'
 import MapPicker from '@/components/MapPicker'
 import Button from '@/components/ui/button'
-import Card from '@/components/ui/Card'
+import {
+  CreateChoreLayout,
+  ChorePreviewCard,
+  FormInput,
+  FormTextArea,
+  ChoreTypeToggle,
+  CategorySelect,
+  BudgetInput,
+  ImageUploadZone,
+  DateTimeInput,
+  itemVariants,
+} from '@/components/chores/LovableCreateChorePage'
+import { MapPin, AlertCircle } from 'lucide-react'
+import { cn } from '@/lib/utils'
+import {
+  validateImageFile,
+  IMAGE_VALIDATION_ERRORS,
+} from '@/lib/validation/image'
 
 interface ChoreFormProps {
   mode: 'create' | 'edit'
@@ -187,19 +205,19 @@ export default function ChoreForm({ mode, initialChore }: ChoreFormProps) {
     const file = e.target.files?.[0]
     if (!file) return
 
-    // Validate file type
-    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp']
-    if (!allowedTypes.includes(file.type)) {
-      setError('Invalid file type. Only JPEG, PNG, and WebP images are allowed.')
+    // Client-side validation using shared utility
+    const validationError = validateImageFile(file)
+    if (validationError) {
+      setError(validationError)
+      setImagePreview('')  // Clear preview on invalid file
+      setImageUrl('')
+      // Reset file input so the same file can be re-selected after fixing
+      e.target.value = ''
       return
     }
 
-    // Validate file size (max 5MB)
-    const maxSize = 5 * 1024 * 1024 // 5MB
-    if (file.size > maxSize) {
-      setError('File size exceeds 5MB limit.')
-      return
-    }
+    // Clear any previous error
+    setError('')
 
     // Show preview
     const reader = new FileReader()
@@ -210,7 +228,6 @@ export default function ChoreForm({ mode, initialChore }: ChoreFormProps) {
 
     // Upload file
     setUploadingImage(true)
-    setError('')
     
     try {
       const uploadFormData = new FormData()
@@ -224,15 +241,17 @@ export default function ChoreForm({ mode, initialChore }: ChoreFormProps) {
       const data = await response.json()
 
       if (!response.ok) {
-        setError(data.error || 'Failed to upload image')
+        setError(data.error || IMAGE_VALIDATION_ERRORS.UPLOAD_FAILED)
         setImagePreview('')
+        setImageUrl('')
         return
       }
 
       setImageUrl(data.url)
     } catch (err) {
-      setError('Failed to upload image. Please try again.')
+      setError(IMAGE_VALIDATION_ERRORS.UPLOAD_FAILED)
       setImagePreview('')
+      setImageUrl('')
     } finally {
       setUploadingImage(false)
     }
@@ -243,222 +262,209 @@ export default function ChoreForm({ mode, initialChore }: ChoreFormProps) {
     setImagePreview('')
   }
 
-  return (
-    <form onSubmit={handleSubmit} className="space-y-6">
-      {error && (
-        <div className="rounded-md bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 p-4">
-          <p className="text-sm text-red-800 dark:text-red-300">{error}</p>
-        </div>
-      )}
+  // Build sidebar preview
+  const sidebarPreview = (
+    <ChorePreviewCard
+      title={formData.title}
+      description={formData.description}
+      category={formData.category}
+      budget={formData.budget}
+      location={formData.locationAddress}
+      dueAt={formData.dueAt}
+      imageUrl={imagePreview || imageUrl}
+      type={formData.type}
+    />
+  )
 
-      <div>
-        <label htmlFor="title" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-          Title *
-        </label>
-        <input
-          type="text"
+  return (
+    <CreateChoreLayout
+      title={mode === 'create' ? 'Create a New Chore' : 'Edit Chore'}
+      subtitle={mode === 'create' 
+        ? 'Post your task and connect with trusted helpers in your area'
+        : 'Update the details of your chore'}
+      sidebar={sidebarPreview}
+    >
+      <form onSubmit={handleSubmit} className="space-y-6">
+        {/* Error Alert */}
+        {error && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="rounded-lg bg-destructive/10 border border-destructive/20 p-4 flex items-start gap-3"
+          >
+            <AlertCircle className="w-5 h-5 text-destructive shrink-0 mt-0.5" />
+            <p className="text-sm text-destructive">{error}</p>
+          </motion.div>
+        )}
+
+        {/* Status Warning for Edit Mode */}
+        {mode === 'edit' && isCompletedOrCancelled && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="rounded-lg bg-muted p-4 text-center"
+          >
+            <p className="text-sm text-muted-foreground">
+              This chore is {status?.toLowerCase()}. No further edits are allowed.
+            </p>
+          </motion.div>
+        )}
+
+        {/* Title */}
+        <FormInput
           id="title"
           name="title"
-          required
-          disabled={titleDisabled}
-          className="mt-1 block w-full rounded-md border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-slate-700 dark:text-slate-300 placeholder-gray-400 dark:placeholder-slate-500 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 sm:text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+          label="Title"
+          placeholder="e.g., Help with garden cleanup"
           value={formData.title}
           onChange={handleChange}
+          disabled={titleDisabled}
+          required
         />
-      </div>
 
-      <div>
-        <label htmlFor="description" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-          Description *
-        </label>
-        <textarea
+        {/* Description */}
+        <FormTextArea
           id="description"
           name="description"
-          required
-          rows={4}
-          disabled={descriptionDisabled}
-          className="mt-1 block w-full rounded-md border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-slate-700 dark:text-slate-300 placeholder-gray-400 dark:placeholder-slate-500 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 sm:text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+          label="Description"
+          placeholder="Describe what you need done, any specific requirements, tools needed..."
           value={formData.description}
           onChange={handleChange}
-        />
-      </div>
-
-      <div>
-        <label htmlFor="type" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-          Type *
-        </label>
-        <select
-          id="type"
-          name="type"
+          disabled={descriptionDisabled}
+          maxLength={1000}
           required
-          disabled={typeDisabled}
-          className="mt-1 block w-full rounded-md border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-slate-700 dark:text-slate-300 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 sm:text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+        />
+
+        {/* Type Toggle */}
+        <ChoreTypeToggle
           value={formData.type}
-          onChange={handleChange}
-        >
-          <option value="ONLINE">Online</option>
-          <option value="OFFLINE">Offline</option>
-        </select>
-      </div>
+          onChange={(value) => setFormData((prev) => ({ ...prev, type: value }))}
+          disabled={typeDisabled}
+        />
 
-      <div>
-        <label htmlFor="category" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-          Category *
-        </label>
-        <input
-          type="text"
-          id="category"
-          name="category"
-          required
-          disabled={categoryDisabled}
-          placeholder="e.g., Cleaning, Gardening, Tech Support"
-          className="mt-1 block w-full rounded-md border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-slate-700 dark:text-slate-300 placeholder-gray-400 dark:placeholder-slate-500 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 sm:text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+        {/* Category - with suggested presets and custom input */}
+        <CategorySelect
           value={formData.category}
-          onChange={handleChange}
+          onChange={(value) => setFormData((prev) => ({ ...prev, category: value }))}
+          disabled={categoryDisabled}
         />
-      </div>
 
-      <div>
-        <label htmlFor="budget" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-          Budget (optional)
-        </label>
-        <input
-          type="number"
-          id="budget"
-          name="budget"
-          min="0"
-          disabled={budgetDisabled}
-          placeholder="Amount in your currency"
-          className="mt-1 block w-full rounded-md border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-slate-700 dark:text-slate-300 placeholder-gray-400 dark:placeholder-slate-500 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 sm:text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+        {/* Budget */}
+        <BudgetInput
           value={formData.budget}
-          onChange={handleChange}
+          onChange={(value) => setFormData((prev) => ({ ...prev, budget: value }))}
+          disabled={budgetDisabled}
         />
-      </div>
 
-      <div>
-        <label htmlFor="image" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-          Image (optional)
-        </label>
-        <input
-          type="file"
-          id="image"
-          name="image"
-          accept="image/jpeg,image/jpg,image/png,image/webp"
-          onChange={handleImageChange}
-          disabled={uploadingImage || imageDisabled}
-          className="mt-1 block w-full text-sm text-slate-500 dark:text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 dark:file:bg-blue-900/20 file:text-blue-700 dark:file:text-blue-300 hover:file:bg-blue-100 dark:hover:file:bg-blue-900/30 disabled:opacity-50 disabled:cursor-not-allowed"
+        {/* Image Upload */}
+        <ImageUploadZone
+          imagePreview={imagePreview}
+          imageUrl={imageUrl}
+          onFileChange={handleImageChange}
+          onRemove={handleRemoveImage}
+          uploading={uploadingImage}
+          disabled={imageDisabled}
         />
-        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-          JPEG, PNG, or WebP. Max 5MB.
-        </p>
-        {uploadingImage && (
-          <p className="mt-2 text-sm text-blue-600 dark:text-blue-400">Uploading image...</p>
-        )}
-        {(imagePreview || imageUrl) && (
-          <div className="mt-4 relative">
-            <img
-              src={imagePreview || imageUrl}
-              alt="Preview"
-              className="h-48 w-full object-cover rounded-lg border border-gray-300 dark:border-slate-700"
-            />
-            <Button
-              type="button"
-              onClick={handleRemoveImage}
-              variant="danger"
-              size="sm"
-              className="absolute top-2 right-2"
-            >
-              Remove
-            </Button>
-          </div>
-        )}
-      </div>
 
-      {formData.type === 'OFFLINE' && (
-        <>
-          <div>
-            <label htmlFor="locationAddress" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-              Location Address *
-            </label>
-            <input
-              type="text"
-              id="locationAddress"
-              name="locationAddress"
-              required={formData.type === 'OFFLINE' && !locationDisabled}
-              disabled={locationDisabled}
-              placeholder="Street address, city, state"
-              className="mt-1 block w-full rounded-md border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-slate-700 dark:text-slate-300 placeholder-gray-400 dark:placeholder-slate-500 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 sm:text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-              value={formData.locationAddress}
-              onChange={handleChange}
-            />
-          </div>
-          
-          <div>
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-              Location on Map *
-            </label>
-            <div className={locationDisabled ? 'pointer-events-none opacity-50' : ''}>
-              <MapPicker
-                lat={formData.locationLat ? parseFloat(formData.locationLat) : null}
-                lng={formData.locationLng ? parseFloat(formData.locationLng) : null}
-                onChange={(lat, lng) => {
-                  if (!locationDisabled) {
+        {/* OFFLINE Location Section */}
+        {formData.type === 'OFFLINE' && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            transition={{ duration: 0.3 }}
+            className="space-y-6 pt-2"
+          >
+            <div className="border-t border-border pt-6 space-y-6">
+              <h3 className="text-lg font-semibold text-foreground flex items-center gap-2">
+                <MapPin className="w-5 h-5 text-primary" />
+                Location Details
+                <span className="text-sm font-normal text-muted-foreground">(Required for Offline Chores)</span>
+              </h3>
+              
+              {/* Location Address Input - using plain elements, not variants */}
+              <div className="space-y-2">
+                <label 
+                  htmlFor="locationAddress" 
+                  className="block text-sm font-medium text-foreground"
+                >
+                  Location Address <span className="text-destructive">*</span>
+                </label>
+                <div className="relative">
+                  <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <input
+                    id="locationAddress"
+                    name="locationAddress"
+                    type="text"
+                    placeholder="Street address, city, state"
+                    value={formData.locationAddress}
+                    onChange={handleChange}
+                    disabled={locationDisabled}
+                    required={formData.type === 'OFFLINE' && !locationDisabled}
+                    className={cn(
+                      "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm pl-10",
+                      "ring-offset-background placeholder:text-muted-foreground",
+                      "focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
+                      "disabled:cursor-not-allowed disabled:opacity-50"
+                    )}
+                  />
+                </div>
+              </div>
+
+              {/* Map Picker Section - no variants needed */}
+              <div className="space-y-3">
+                <label className="block text-sm font-medium text-foreground">
+                  Pin Location on Map <span className="text-destructive">*</span>
+                </label>
+                <MapPicker
+                  lat={formData.locationLat ? parseFloat(formData.locationLat) : null}
+                  lng={formData.locationLng ? parseFloat(formData.locationLng) : null}
+                  onChange={(lat, lng) => {
                     setFormData((prev) => ({
                       ...prev,
                       locationLat: lat.toString(),
                       locationLng: lng.toString(),
                     }))
-                  }
-                }}
-                heightClass="h-64"
-              />
+                  }}
+                  heightClass="h-72"
+                  disabled={locationDisabled}
+                />
+              </div>
             </div>
-            {formData.locationLat && formData.locationLng && (
-              <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
-                Coordinates: Lat {parseFloat(formData.locationLat).toFixed(6)}, Lng{' '}
-                {parseFloat(formData.locationLng).toFixed(6)}
-              </p>
-            )}
-          </div>
-        </>
-      )}
+          </motion.div>
+        )}
 
-      <div>
-        <label htmlFor="dueAt" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-          Due Date (optional)
-        </label>
-        <input
-          type="datetime-local"
-          id="dueAt"
-          name="dueAt"
-          disabled={dueAtDisabled}
-          className="mt-1 block w-full rounded-md border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-slate-700 dark:text-slate-300 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 sm:text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+        {/* Due Date */}
+        <DateTimeInput
+          label="Due Date (optional)"
           value={formData.dueAt}
-          onChange={handleChange}
+          onChange={(value) => setFormData((prev) => ({ ...prev, dueAt: value }))}
+          disabled={dueAtDisabled}
         />
-      </div>
 
-      <div className="flex gap-4">
-        <Button
-          type="submit"
-          disabled={loading || isCompletedOrCancelled}
-          variant="primary"
-          className="flex-1"
-        >
-          {loading 
-            ? (mode === 'create' ? 'Creating...' : 'Saving...') 
-            : (mode === 'create' ? 'Create Chore' : 'Save Changes')}
-        </Button>
-        <Button
-          type="button"
-          onClick={() => router.back()}
-          variant="secondary"
-          className="flex-1"
-        >
-          Cancel
-        </Button>
-      </div>
-    </form>
+        {/* Action Buttons */}
+        <motion.div variants={itemVariants} className="flex gap-4 pt-4 border-t border-border">
+          <Button
+            type="button"
+            onClick={() => router.back()}
+            variant="outline"
+            className="flex-1"
+            disabled={loading}
+          >
+            Cancel
+          </Button>
+          <Button
+            type="submit"
+            disabled={loading || isCompletedOrCancelled}
+            variant="primary"
+            className="flex-1"
+          >
+            {loading 
+              ? (mode === 'create' ? 'Creating...' : 'Saving...') 
+              : (mode === 'create' ? 'Create Chore' : 'Save Changes')}
+          </Button>
+        </motion.div>
+      </form>
+    </CreateChoreLayout>
   )
 }
-

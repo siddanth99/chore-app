@@ -2,6 +2,8 @@
 import { prisma } from '../db/client'
 import { ChoreStatus, ChoreType, NotificationType } from '@prisma/client'
 import { createNotification } from './notifications'
+import { createChoreSchema } from '@/lib/validation/chore.schema'
+import { AuthorizationError, AUTH_ERRORS } from '../auth/role'
 
 /** ---------- Types ---------- */
 
@@ -15,28 +17,90 @@ export interface CreateChoreInput {
   locationAddress?: string | null
   locationLat?: number | null
   locationLng?: number | null
-  dueAt?: Date | null
+  dueAt?: string | Date | null  // Accept string from datetime-local input
   createdById: string
+}
+
+/** ---------- Validation Helper ---------- */
+
+/**
+ * Validate input against a Zod schema and throw AuthorizationError if invalid
+ */
+function validateInput<T>(schema: { safeParse: (input: unknown) => { success: boolean; data?: T; error?: any } }, input: unknown): T {
+  const parsed = schema.safeParse(input)
+  if (!parsed.success) {
+    throw new AuthorizationError(
+      AUTH_ERRORS.INVALID_INPUT,
+      JSON.stringify(parsed.error.flatten())
+    )
+  }
+  return parsed.data as T
+}
+
+/** ---------- Helpers ---------- */
+
+/**
+ * Normalize dueAt value from various input formats to Date | null.
+ * Handles:
+ * - null/undefined → null
+ * - Date object → Date
+ * - String from <input type="datetime-local"> (e.g., "2025-12-04T16:47") → Date
+ * - Full ISO string (e.g., "2025-12-04T16:47:00.000Z") → Date
+ * - Invalid string → null
+ */
+function normalizeDueAt(dueAt: string | Date | null | undefined): Date | null {
+  if (!dueAt) return null
+  
+  // If already a Date, return it
+  if (dueAt instanceof Date) {
+    return isNaN(dueAt.getTime()) ? null : dueAt
+  }
+  
+  // If it's a string, parse it
+  // datetime-local format: "2025-12-04T16:47"
+  // This is valid input for new Date() constructor
+  const parsed = new Date(dueAt)
+  if (isNaN(parsed.getTime())) {
+    console.warn(`Invalid dueAt value: "${dueAt}" - returning null`)
+    return null
+  }
+  
+  return parsed
 }
 
 /** ---------- Core helpers ---------- */
 
 // Create a new chore
 export async function createChore(input: CreateChoreInput) {
+  // Validate input with Zod schema
+  // Note: createdById is set by the caller (API route) from session, not validated here
+  const validatedInput = validateInput(createChoreSchema, {
+    title: input.title,
+    description: input.description,
+    type: input.type,
+    category: input.category,
+    budget: input.budget,
+    imageUrl: input.imageUrl,
+    locationAddress: input.locationAddress,
+    locationLat: input.locationLat,
+    locationLng: input.locationLng,
+    dueAt: input.dueAt,
+  })
+
   return prisma.chore.create({
     data: {
-      title: input.title,
-      description: input.description,
-      type: input.type,
+      title: validatedInput.title,
+      description: validatedInput.description,
+      type: validatedInput.type,
       status: ChoreStatus.PUBLISHED, // or DRAFT if you prefer
-      category: input.category,
-      budget: input.budget ?? null,
-      imageUrl: input.imageUrl ?? null,
-      locationAddress: input.locationAddress ?? null,
-      locationLat: input.type === 'OFFLINE' ? input.locationLat ?? null : null,
-      locationLng: input.type === 'OFFLINE' ? input.locationLng ?? null : null,
-      dueAt: input.dueAt ?? null,
-      createdById: input.createdById,
+      category: validatedInput.category,
+      budget: validatedInput.budget ?? null,
+      imageUrl: validatedInput.imageUrl ?? null,
+      locationAddress: validatedInput.locationAddress ?? null,
+      locationLat: validatedInput.type === 'OFFLINE' ? validatedInput.locationLat ?? null : null,
+      locationLng: validatedInput.type === 'OFFLINE' ? validatedInput.locationLng ?? null : null,
+      dueAt: normalizeDueAt(validatedInput.dueAt),
+      createdById: input.createdById, // Always from session, not validated input
     },
   })
 }
@@ -140,29 +204,40 @@ export async function getUniqueCategories(): Promise<string[]> {
 
 /** ---------- Status helpers (start / complete) ---------- */
 
+/**
+ * Mark chore as IN_PROGRESS
+ * Security: Only the assigned worker can start the chore
+ * @param choreId - The chore ID
+ * @param workerId - Must be from session (not from client)
+ */
 export async function markChoreInProgress(choreId: string, workerId: string) {
-  // Ensure chore exists and is assigned to this worker
+  // Ensure chore exists
   const chore = await prisma.chore.findUnique({
     where: { id: choreId },
     include: {
       createdBy: {
-        select: {
-          id: true,
-        },
+        select: { id: true },
       },
     },
   })
 
   if (!chore) {
-    throw new Error('Chore not found')
+    throw new AuthorizationError(AUTH_ERRORS.NOT_FOUND, 'Chore not found')
   }
 
+  // Security: Only the assigned worker can start
   if (chore.assignedWorkerId !== workerId) {
-    throw new Error('You are not assigned to this chore')
+    throw new AuthorizationError(
+      AUTH_ERRORS.FORBIDDEN_OWNER,
+      'You are not assigned to this chore'
+    )
   }
 
   if (chore.status !== ChoreStatus.ASSIGNED) {
-    throw new Error('Chore must be ASSIGNED to start')
+    throw new AuthorizationError(
+      AUTH_ERRORS.FORBIDDEN,
+      'Chore must be ASSIGNED to start'
+    )
   }
 
   const updatedChore = await prisma.chore.update({
@@ -183,31 +258,42 @@ export async function markChoreInProgress(choreId: string, workerId: string) {
   return updatedChore
 }
 
+/**
+ * Mark chore as COMPLETED
+ * Security: Only the assigned worker can complete the chore
+ * @param choreId - The chore ID
+ * @param workerId - Must be from session (not from client)
+ */
 export async function markChoreCompleted(choreId: string, workerId: string) {
   const chore = await prisma.chore.findUnique({
     where: { id: choreId },
     include: {
       createdBy: {
-        select: {
-          id: true,
-        },
+        select: { id: true },
       },
     },
   })
 
   if (!chore) {
-    throw new Error('Chore not found')
+    throw new AuthorizationError(AUTH_ERRORS.NOT_FOUND, 'Chore not found')
   }
 
+  // Security: Only the assigned worker can complete
   if (chore.assignedWorkerId !== workerId) {
-    throw new Error('You are not assigned to this chore')
+    throw new AuthorizationError(
+      AUTH_ERRORS.FORBIDDEN_OWNER,
+      'You are not assigned to this chore'
+    )
   }
 
   if (
     chore.status !== ChoreStatus.IN_PROGRESS &&
     chore.status !== ChoreStatus.ASSIGNED
   ) {
-    throw new Error('Chore must be IN_PROGRESS or ASSIGNED to complete')
+    throw new AuthorizationError(
+      AUTH_ERRORS.FORBIDDEN,
+      'Chore must be IN_PROGRESS or ASSIGNED to complete'
+    )
   }
 
   const updatedChore = await prisma.chore.update({

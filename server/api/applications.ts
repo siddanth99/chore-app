@@ -3,6 +3,8 @@ import { prisma } from '../db/client'
 import { ApplicationStatus, ChoreStatus, NotificationType } from '@prisma/client'
 import { createNotification } from './notifications'
 import { maybeSendExternalNotification } from '../notifications'
+import { AuthorizationError, AUTH_ERRORS } from '../auth/role'
+import { createApplicationSchema } from '@/lib/validation/application.schema'
 
 export interface CreateApplicationInput {
   choreId: string
@@ -11,10 +13,34 @@ export interface CreateApplicationInput {
   message?: string
 }
 
+/**
+ * Create a new application for a chore
+ * Security:
+ * - workerId MUST come from session (never from client body)
+ * - Workers cannot apply to their own chores
+ * - Cannot apply twice to the same chore
+ */
 export async function createApplication(input: CreateApplicationInput) {
+  // Validate input with Zod schema
+  // Note: workerId is set by the caller from session, not validated here
+  const parsed = createApplicationSchema.safeParse({
+    choreId: input.choreId,
+    bidAmount: input.bidAmount,
+    message: input.message,
+  })
+  
+  if (!parsed.success) {
+    throw new AuthorizationError(
+      AUTH_ERRORS.INVALID_INPUT,
+      JSON.stringify(parsed.error.flatten())
+    )
+  }
+  
+  const validatedInput = parsed.data
+  
   // Validate chore exists and is PUBLISHED
   const chore = await prisma.chore.findUnique({
-    where: { id: input.choreId },
+    where: { id: validatedInput.choreId },
     include: {
       createdBy: {
         select: {
@@ -27,23 +53,37 @@ export async function createApplication(input: CreateApplicationInput) {
   })
 
   if (!chore) {
-    throw new Error('Chore not found')
+    throw new AuthorizationError(AUTH_ERRORS.NOT_FOUND, 'Chore not found')
   }
 
   if (chore.status !== ChoreStatus.PUBLISHED) {
-    throw new Error('Chore is not available for applications')
+    throw new AuthorizationError(
+      AUTH_ERRORS.FORBIDDEN,
+      'Chore is not available for applications'
+    )
+  }
+
+  // Security: Workers cannot apply to their own chores
+  if (chore.createdById === input.workerId) {
+    throw new AuthorizationError(
+      AUTH_ERRORS.FORBIDDEN_SELF_APPLICATION,
+      'You cannot apply to your own chore'
+    )
   }
 
   // Check if worker has already applied to this chore
   const existing = await prisma.application.findFirst({
     where: {
-      choreId: input.choreId,
-      workerId: input.workerId,
+      choreId: validatedInput.choreId,
+      workerId: input.workerId, // workerId from session
     },
   })
 
   if (existing) {
-    throw new Error('You have already applied to this chore.')
+    throw new AuthorizationError(
+      AUTH_ERRORS.CONFLICT,
+      'You have already applied to this chore'
+    )
   }
 
   // Get worker info for notification
@@ -55,10 +95,10 @@ export async function createApplication(input: CreateApplicationInput) {
   // Create the application
   const application = await prisma.application.create({
     data: {
-      choreId: input.choreId,
-      workerId: input.workerId,
-      bidAmount: input.bidAmount ?? null,
-      message: input.message ?? null,
+      choreId: validatedInput.choreId,
+      workerId: input.workerId, // workerId always from session
+      bidAmount: validatedInput.bidAmount ?? null,
+      message: validatedInput.message ?? null,
       status: ApplicationStatus.PENDING,
     },
   })
@@ -90,6 +130,12 @@ export async function createApplication(input: CreateApplicationInput) {
   return application
 }
 
+/**
+ * Assign an application (accept a worker)
+ * Security:
+ * - customerId MUST come from session (never from client body)
+ * - Only the chore owner can assign
+ */
 export async function assignApplication(
   applicationId: string,
   customerId: string
@@ -103,21 +149,30 @@ export async function assignApplication(
   })
 
   if (!application) {
-    throw new Error('Application not found')
+    throw new AuthorizationError(AUTH_ERRORS.NOT_FOUND, 'Application not found')
   }
 
-  // Only the owner of the chore can assign
+  // Security: Only the owner of the chore can assign
   if (application.chore.createdById !== customerId) {
-    throw new Error('You are not allowed to assign this chore')
+    throw new AuthorizationError(
+      AUTH_ERRORS.FORBIDDEN_OWNER,
+      'You are not allowed to assign this chore'
+    )
   }
 
   if (application.status !== ApplicationStatus.PENDING) {
-    throw new Error('Only pending applications can be assigned')
+    throw new AuthorizationError(
+      AUTH_ERRORS.FORBIDDEN,
+      'Only pending applications can be assigned'
+    )
   }
 
   // Only allow assignment when chore is PUBLISHED
   if (application.chore.status !== ChoreStatus.PUBLISHED) {
-    throw new Error('Chore must be PUBLISHED to be assigned')
+    throw new AuthorizationError(
+      AUTH_ERRORS.FORBIDDEN,
+      'Chore must be PUBLISHED to be assigned'
+    )
   }
 
   // Do everything in a transaction
@@ -255,23 +310,32 @@ export async function listApplicationsForWorkerDashboard(workerId: string) {
   });
 }
 
-// List applications for a specific chore (CUSTOMER-only, owner check)
+/**
+ * List applications for a specific chore
+ * Security:
+ * - customerId MUST come from session (never from client)
+ * - Only the chore owner can view applications
+ */
 export async function listApplicationsForChore(
   choreId: string,
   customerId: string
 ) {
-  // Ensure the chore exists and belongs to this customer
+  // Ensure the chore exists
   const chore = await prisma.chore.findUnique({
     where: { id: choreId },
     select: { createdById: true },
   })
 
   if (!chore) {
-    throw new Error('Chore not found')
+    throw new AuthorizationError(AUTH_ERRORS.NOT_FOUND, 'Chore not found')
   }
 
+  // Security: Only the chore owner can view applications
   if (chore.createdById !== customerId) {
-    throw new Error('You are not allowed to view applications for this chore')
+    throw new AuthorizationError(
+      AUTH_ERRORS.FORBIDDEN_OWNER,
+      'You are not allowed to view applications for this chore'
+    )
   }
 
   // Return all applications for this chore with worker info

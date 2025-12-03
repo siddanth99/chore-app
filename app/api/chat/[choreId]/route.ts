@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { listMessages, sendMessage } from '@/server/api/chat'
-import { requireAuth } from '@/server/auth/role'
+import { requireAuth, isAuthError, getHttpStatusForAuthError } from '@/server/auth/role'
+import { messageSendLimiter, getRateLimitKey, createRateLimitResponse } from '@/lib/rate-limit'
 
 export async function GET(
   request: NextRequest,
@@ -27,6 +28,18 @@ export async function POST(
 ) {
   try {
     const user = await requireAuth()
+
+    // Rate limiting: Prevent chat spam
+    const rateLimitKey = getRateLimitKey(request, user.id)
+    const { success, reset } = await messageSendLimiter.limit(rateLimitKey)
+    
+    if (!success) {
+      return NextResponse.json(
+        createRateLimitResponse(reset, 'Rate limit exceeded. Please slow down your messages.'),
+        { status: 429 }
+      )
+    }
+
     const { choreId } = await context.params
     const body = await request.json()
 
@@ -42,6 +55,16 @@ export async function POST(
     return NextResponse.json({ message }, { status: 201 })
   } catch (error: any) {
     console.error('Error sending message:', error)
+    
+    // Handle auth errors
+    if (isAuthError(error)) {
+      const status = getHttpStatusForAuthError(error)
+      return NextResponse.json(
+        { error: error.message || 'Access denied' },
+        { status }
+      )
+    }
+    
     return NextResponse.json(
       { error: error.message || 'Failed to send message' },
       { status: 400 }

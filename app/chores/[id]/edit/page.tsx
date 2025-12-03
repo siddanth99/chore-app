@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation'
-import { getCurrentUser } from '@/server/auth/role'
+import { requireRole, isOwner } from '@/server/auth/role'
 import { getChoreById } from '@/server/api/chores'
-import { ChoreStatus } from '@prisma/client'
+import { ChoreStatus, UserRole } from '@prisma/client'
 import ChoreForm from '../../new/chore-form'
 import Card from '@/components/ui/Card'
 
@@ -12,8 +12,11 @@ export default async function EditChorePage({
 }) {
   const { id } = await params
 
-  const user = await getCurrentUser()
-  if (!user) {
+  // RBAC: Only CUSTOMER can edit chores (workers can only view)
+  let user
+  try {
+    user = await requireRole(UserRole.CUSTOMER)
+  } catch {
     redirect('/login')
   }
 
@@ -36,8 +39,8 @@ export default async function EditChorePage({
     )
   }
 
-  // Check if user is the owner
-  if (chore.createdById !== user.id) {
+  // RBAC: Check if user is the owner
+  if (!isOwner(user.id, chore.createdById)) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-slate-950 py-12 px-4 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-2xl">
@@ -59,33 +62,25 @@ export default async function EditChorePage({
     redirect(`/chores/${id}`)
   }
 
+  // ChoreForm uses CreateChoreLayout which provides its own full-page layout,
+  // hero header, and responsive container. No outer wrapper needed.
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-slate-950 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="mx-auto max-w-2xl">
-        <Card className="px-6 py-8">
-          <h1 className="text-3xl font-bold text-slate-900 dark:text-slate-50 mb-6">
-            Edit Chore
-          </h1>
-          <ChoreForm
-            mode="edit"
-            initialChore={{
-              id: chore.id,
-              title: chore.title,
-              description: chore.description,
-              type: chore.type,
-              category: chore.category,
-              budget: chore.budget,
-              locationAddress: chore.locationAddress,
-              locationLat: chore.locationLat,
-              locationLng: chore.locationLng,
-              dueAt: chore.dueAt ? chore.dueAt.toISOString() : null,
-              imageUrl: chore.imageUrl,
-              status: chore.status,
-            }}
-          />
-        </Card>
-      </div>
-    </div>
+    <ChoreForm
+      mode="edit"
+      initialChore={{
+        id: chore.id,
+        title: chore.title,
+        description: chore.description,
+        type: chore.type,
+        category: chore.category,
+        budget: chore.budget,
+        locationAddress: chore.locationAddress,
+        locationLat: chore.locationLat,
+        locationLng: chore.locationLng,
+        dueAt: chore.dueAt ? chore.dueAt.toISOString() : null,
+        imageUrl: chore.imageUrl,
+        status: chore.status,
+      }}
+    />
   )
 }
-

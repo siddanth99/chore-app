@@ -1,5 +1,6 @@
 import Card from '@/components/ui/Card'
 import Link from 'next/link'
+import { formatDate } from '@/lib/utils'
 
 interface Review {
   id: string
@@ -78,7 +79,7 @@ export default function ReviewsList({ reviews }: ReviewsListProps) {
               </p>
             )}
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-2">
-              {new Date(review.createdAt).toLocaleDateString()}
+              {formatDate(review.createdAt)}
             </p>
           </div>
         ))}

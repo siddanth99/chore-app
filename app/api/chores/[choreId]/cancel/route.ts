@@ -1,18 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireRole } from '@/server/auth/role'
+import { requireRole, getHttpStatusForAuthError, isAuthError } from '@/server/auth/role'
 import { UserRole } from '@prisma/client'
 import { customerDirectCancel } from '@/server/api/cancellations'
 
+/**
+ * POST /api/chores/[choreId]/cancel
+ * Cancel a chore (CUSTOMER only)
+ * Security: customerId always comes from session
+ */
 export async function POST(
   request: NextRequest,
   context: { params: Promise<{ choreId: string }> }
 ) {
   try {
+    // RBAC: Only customers can cancel chores
     const customer = await requireRole(UserRole.CUSTOMER)
     const { choreId } = await context.params
     const body = await request.json()
     const { reason } = body
 
+    // Security: customerId comes from session, not from client
     const result = await customerDirectCancel(choreId, customer.id, reason)
 
     return NextResponse.json({
@@ -22,21 +29,19 @@ export async function POST(
   } catch (error: any) {
     console.error('Error cancelling chore:', error)
     
-    if (error.message.includes('not found')) {
-      return NextResponse.json({ error: error.message }, { status: 404 })
+    // Handle structured auth/business errors
+    if (isAuthError(error)) {
+      const status = getHttpStatusForAuthError(error)
+      return NextResponse.json(
+        { error: error.message || 'Operation failed' },
+        { status }
+      )
     }
     
-    if (error.message.includes('Only the chore owner')) {
-      return NextResponse.json({ error: error.message }, { status: 403 })
-    }
-    
-    if (error.message.includes('must be DRAFT or PUBLISHED')) {
-      return NextResponse.json({ error: error.message }, { status: 400 })
-    }
-
+    // Generic 500 for unknown errors (don't leak details)
     return NextResponse.json(
-      { error: error.message || 'Failed to cancel chore' },
-      { status: 400 }
+      { error: 'Internal server error' },
+      { status: 500 }
     )
   }
 }

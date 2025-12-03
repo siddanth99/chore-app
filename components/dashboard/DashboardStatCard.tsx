@@ -1,3 +1,6 @@
+// TODO: Legacy dashboard UI. Candidate for removal after v2 dashboard is fully verified in production.
+// See components/dashboard/StatCard.tsx for the new Lovable UI implementation.
+
 interface DashboardStatCardProps {
   icon: string
   label: string

@@ -9,6 +9,7 @@ import MapPreview from '@/components/MapPreview'
 import Button from '@/components/ui/button'
 import Badge from '@/components/ui/Badge'
 import Card from '@/components/ui/Card'
+import { formatDate } from '@/lib/utils'
 
 interface PaymentSummary {
   totalFromCustomer: number
@@ -620,7 +621,7 @@ export default function ChoreDetailClient({
                   <div>
                     <h3 className="text-sm font-medium text-slate-500 dark:text-slate-400">Due Date</h3>
                     <p className="mt-1 text-slate-700 dark:text-slate-300">
-                      {new Date(chore.dueAt).toLocaleDateString()}
+                      {formatDate(chore.dueAt)}
                     </p>
                   </div>
                 )}
@@ -884,7 +885,7 @@ export default function ChoreDetailClient({
                       <p className="mb-2 text-sm text-slate-700 dark:text-slate-300">{app.message}</p>
                     )}
                     <p className="text-xs text-slate-500 dark:text-slate-400">
-                      Applied on {new Date(app.createdAt).toLocaleDateString()}
+                      Applied on {formatDate(app.createdAt)}
                     </p>
                     {app.status === 'PENDING' && choreStatus === 'PUBLISHED' && (
                       <Button

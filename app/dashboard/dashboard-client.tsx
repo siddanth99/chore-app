@@ -1,3 +1,5 @@
+// TODO: Legacy dashboard UI. Candidate for removal after v2 dashboard is fully verified in production.
+// See dashboard-client-v2.tsx for the new Lovable UI implementation.
 'use client'
 
 import { useState } from 'react'
@@ -10,6 +12,7 @@ import LogoutButton from './logout-button'
 import Button from '@/components/ui/button'
 import Card from '@/components/ui/Card'
 import Badge from '@/components/ui/Badge'
+import { formatDate } from '@/lib/utils'
 
 interface DashboardClientProps {
   user: any
@@ -227,7 +230,7 @@ export default function DashboardClient({ user, role, data }: DashboardClientPro
                         {workerData.paymentDashboard.recentPayments.map((payment) => (
                           <tr key={payment.id}>
                             <td className="py-2 pr-4 text-slate-700 dark:text-slate-300">
-                              {new Date(payment.createdAt).toLocaleDateString()}
+                              {formatDate(payment.createdAt)}
                             </td>
                             <td className="py-2 pr-4">
                               <Link
@@ -531,7 +534,7 @@ export default function DashboardClient({ user, role, data }: DashboardClientPro
                       {customerData.paymentDashboard.recentPayments.map((payment) => (
                         <tr key={payment.id}>
                           <td className="py-2 pr-4 text-slate-700 dark:text-slate-300">
-                            {new Date(payment.createdAt).toLocaleDateString()}
+                            {formatDate(payment.createdAt)}
                           </td>
                           <td className="py-2 pr-4">
                             <Link

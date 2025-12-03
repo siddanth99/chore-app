@@ -5,6 +5,13 @@ import {
   getCustomerDashboardData,
 } from '@/server/api/dashboard'
 import DashboardClient from './dashboard-client'
+import DashboardClientV2 from './dashboard-client-v2'
+
+// -----------------------------------------------------------------------------
+// Feature Flag: Toggle between legacy and v2 dashboard UI
+// Set to true to use the new Lovable UI components
+// -----------------------------------------------------------------------------
+const USE_V2_DASHBOARD = true
 
 export default async function DashboardPage() {
   const user = await getCurrentUser()
@@ -44,6 +51,17 @@ export default async function DashboardPage() {
           </div>
         </div>
       </div>
+    )
+  }
+
+  // Render v2 or legacy dashboard based on feature flag
+  if (USE_V2_DASHBOARD) {
+    return (
+      <DashboardClientV2
+        user={user}
+        role={user.role}
+        data={dashboardData}
+      />
     )
   }
 

@@ -2,6 +2,10 @@
 
 import React, { useState, useRef, useEffect } from 'react'
 import Button from '@/components/ui/button'
+import {
+  validateImageFile,
+  IMAGE_VALIDATION_ERRORS,
+} from '@/lib/validation/image'
 
 interface EditProfileModalProps {
   isOpen: boolean
@@ -24,7 +28,7 @@ interface EditProfileModalProps {
     location: string
     skills: string[]
     hourlyRate: number | null
-    avatarFile?: File
+    avatarUrl?: string | null
   }) => Promise<void>
 }
 
@@ -47,7 +51,6 @@ export default function EditProfileModal({
   const [avatarPreview, setAvatarPreview] = useState<string | null>(
     profile.avatarUrl
   )
-  const [avatarFile, setAvatarFile] = useState<File | null>(null)
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [isSaving, setIsSaving] = useState(false)
   const [showSuccess, setShowSuccess] = useState(false)
@@ -64,7 +67,6 @@ export default function EditProfileModal({
       setSkills(profile.skills?.join(', ') || '')
       setHourlyRate(profile.hourlyRate?.toString() || '')
       setAvatarPreview(profile.avatarUrl)
-      setAvatarFile(null)
       setErrors({})
       setShowSuccess(false)
     }
@@ -121,26 +123,25 @@ export default function EditProfileModal({
 
   const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
-    if (file) {
-      // Validate file type
-      if (!file.type.startsWith('image/')) {
-        setErrors({ ...errors, avatar: 'Please select an image file' })
-        return
-      }
-      // Validate file size (max 5MB)
-      if (file.size > 5 * 1024 * 1024) {
-        setErrors({ ...errors, avatar: 'Image must be less than 5MB' })
-        return
-      }
+    if (!file) return
 
-      setAvatarFile(file)
-      const reader = new FileReader()
-      reader.onloadend = () => {
-        setAvatarPreview(reader.result as string)
-      }
-      reader.readAsDataURL(file)
-      setErrors({ ...errors, avatar: '' })
+    // Client-side validation using shared utility
+    const validationError = validateImageFile(file)
+    if (validationError) {
+      setErrors({ ...errors, avatar: validationError })
+      setAvatarPreview(null)  // Clear preview on invalid file
+      // Reset file input so the same file can be re-selected after fixing
+      e.target.value = ''
+      return
     }
+
+    // Read file as data URL and store in avatarPreview for persistence
+    const reader = new FileReader()
+    reader.onloadend = () => {
+      setAvatarPreview(reader.result as string)
+    }
+    reader.readAsDataURL(file)
+    setErrors({ ...errors, avatar: '' })
   }
 
   const validate = (): boolean => {
@@ -185,7 +186,8 @@ export default function EditProfileModal({
         location: location.trim(),
         skills: skillsArray,
         hourlyRate: hourlyRate ? Number(hourlyRate) : null,
-        avatarFile: avatarFile || undefined,
+        // Pass the avatar preview (data URL or existing URL) for persistence
+        avatarUrl: avatarPreview,
       })
 
       setShowSuccess(true)
@@ -282,7 +284,7 @@ export default function EditProfileModal({
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept="image/*"
+                  accept="image/jpeg,image/jpg,image/png,image/webp"
                   onChange={handleAvatarChange}
                   className="hidden"
                   aria-label="Upload profile picture"
@@ -301,8 +303,7 @@ export default function EditProfileModal({
                   </p>
                 )}
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                  {/* TODO: API: implement POST /api/users/:id/avatar */}
-                  Image will be uploaded when you save
+                  JPEG, PNG, or WebP up to 5MB. Saved when you click Save Changes.
                 </p>
               </div>
             </div>

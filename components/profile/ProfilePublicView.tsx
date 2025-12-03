@@ -2,6 +2,7 @@ import Card from '@/components/ui/Card'
 import Badge from '@/components/ui/Badge'
 import RatingSummary from './RatingSummary'
 import ReviewsList from './ReviewsList'
+import { formatDate } from '@/lib/utils'
 
 interface ProfilePublicViewProps {
   user: {
@@ -92,7 +93,7 @@ export default function ProfilePublicView({
               )}
 
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-3">
-                Member since {new Date(user.createdAt).toLocaleDateString()}
+                Member since {formatDate(user.createdAt)}
               </p>
             </div>
           </div>
