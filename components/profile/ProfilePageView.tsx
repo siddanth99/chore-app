@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import ProfileCard from './ProfileCard'
 import RatingSummary from './RatingSummary'
 import ReviewsList from './ReviewsList'
@@ -49,6 +50,7 @@ export default function ProfilePageView({
 }: ProfilePageViewProps) {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [currentProfile, setCurrentProfile] = useState(profile)
+  const router = useRouter()
 
   const handleSave = async (data: {
     name: string
@@ -59,52 +61,55 @@ export default function ProfilePageView({
     hourlyRate: number | null
     avatarFile?: File
   }) => {
-    // TODO: API: implement PATCH /api/users/:id
     // TODO: Analytics: track profile update event
-    // TODO: Image upload: implement POST /api/users/:id/avatar if avatarFile is provided
+    // TODO: Image upload: implement POST /api/profile/avatar if avatarFile is provided
 
     try {
-      // Simulate API call - replace with actual fetch
-      console.log('Saving profile:', {
-        userId: currentProfile.id,
-        ...data,
+      // Call the profile update API
+      const response = await fetch('/api/profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: data.name,
+          bio: data.bio,
+          phone: data.phone,
+          baseLocation: data.location,
+          skills: data.skills,
+          hourlyRate: data.hourlyRate,
+        }),
       })
 
-      // For now, just update local state optimistically
-      setCurrentProfile({
-        ...currentProfile,
-        name: data.name,
-        bio: data.bio || null,
-        phone: data.phone || null,
-        baseLocation: data.location || null,
-        skills: data.skills,
-        hourlyRate: data.hourlyRate,
-        // avatarUrl would be updated from server response
-      })
+      const result = await response.json()
+      
+      if (!response.ok) {
+        throw new Error(result?.error || 'Failed to save profile')
+      }
 
-      // TODO: Replace with actual API call:
-      // const response = await fetch(`/api/users/${currentProfile.id}`, {
-      //   method: 'PATCH',
-      //   headers: { 'Content-Type': 'application/json' },
-      //   body: JSON.stringify({
-      //     name: data.name,
-      //     bio: data.bio,
-      //     phone: data.phone,
-      //     baseLocation: data.location,
-      //     skills: data.skills,
-      //     hourlyRate: data.hourlyRate,
-      //   }),
-      // })
-      // if (!response.ok) throw new Error('Failed to save')
-      //
+      // Update local state with server response
+      if (result.user) {
+        setCurrentProfile({
+          ...currentProfile,
+          name: result.user.name,
+          bio: result.user.bio,
+          baseLocation: result.user.baseLocation,
+          avatarUrl: result.user.avatarUrl,
+          // phone, skills, hourlyRate - update when schema supports them
+        })
+      }
+
+      // TODO: Handle avatar upload separately if avatarFile is provided
       // if (data.avatarFile) {
       //   const formData = new FormData()
       //   formData.append('avatar', data.avatarFile)
-      //   await fetch(`/api/users/${currentProfile.id}/avatar`, {
+      //   await fetch('/api/profile/avatar', {
       //     method: 'POST',
       //     body: formData,
       //   })
       // }
+
+      // Refresh the page to ensure server-rendered data is up to date
+      // This forces a re-fetch of session and profile data
+      router.refresh()
     } catch (error) {
       console.error('Error saving profile:', error)
       throw error
