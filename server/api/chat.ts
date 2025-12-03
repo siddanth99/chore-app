@@ -1,4 +1,7 @@
 import { prisma } from '../db/client'
+import { createNotification } from './notifications'
+import { maybeSendExternalNotification } from '../notifications'
+import { NotificationType } from '@prisma/client'
 
 /**
  * List messages for a specific chore
@@ -96,6 +99,12 @@ export async function sendMessage(choreId: string, userId: string, content: stri
     throw new Error('Cannot send message: no assigned worker yet')
   }
 
+  // Get recipient info for external notification
+  const recipient = await prisma.user.findUnique({
+    where: { id: toUserId },
+    select: { id: true, email: true },
+  })
+
   // Create the message
   const message = await prisma.chatMessage.create({
     data: {
@@ -112,8 +121,42 @@ export async function sendMessage(choreId: string, userId: string, content: stri
           email: true,
         },
       },
+      chore: {
+        select: {
+          id: true,
+          title: true,
+        },
+      },
     },
   })
+
+  // Notify the recipient about the new message
+  try {
+    await createNotification({
+      userId: toUserId,
+      type: NotificationType.SYSTEM,
+      choreId,
+      title: 'New message',
+      message: `${message.fromUser.name} sent you a message about "${message.chore?.title || 'the chore'}"`,
+      link: `/chores/${choreId}`,
+    })
+
+    // Send external notification to recipient (non-blocking)
+    if (process.env.PABBLY_WEBHOOK_URL && recipient?.email) {
+      maybeSendExternalNotification({
+        userId: toUserId,
+        email: recipient.email,
+        event: 'chat.message',
+        title: 'New message',
+        message: `${message.fromUser.name} sent you a message about "${message.chore?.title || 'the chore'}"`,
+        link: `/chores/${choreId}`,
+        meta: { choreId, messageId: message.id },
+      }).catch((e) => console.error('External notif error', e))
+    }
+  } catch (error) {
+    // Don't fail message sending if notification fails
+    console.error('Failed to create notification for chat message:', error)
+  }
 
   return message
 }

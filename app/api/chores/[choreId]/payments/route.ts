@@ -3,6 +3,7 @@ import { requireRole } from '@/server/auth/role'
 import { UserRole, ChoreStatus, PaymentDirection, PaymentMethod, NotificationType } from '@prisma/client'
 import { recordPayment } from '@/server/api/payments'
 import { createNotification } from '@/server/api/notifications'
+import { maybeSendExternalNotification } from '@/server/notifications'
 import { prisma } from '@/server/db/client'
 
 // Next.js 15+ — dynamic route params are a Promise and must be awaited
@@ -26,11 +27,17 @@ export async function POST(
       where: { id: choreId },
       select: {
         id: true,
-        title: true,            // 👈 add this line
+        title: true,
         createdById: true,
         assignedWorkerId: true,
         agreedPrice: true,
         status: true,
+        assignedWorker: {
+          select: {
+            id: true,
+            email: true,
+          },
+        },
       },
     })
 
@@ -135,6 +142,19 @@ export async function POST(
         message: `You received $${amountNumber} for "${chore.title}"`,
         link: `/chores/${chore.id}`,
       })
+
+      // Send external notification to worker (non-blocking)
+      if (process.env.PABBLY_WEBHOOK_URL && chore.assignedWorker?.email) {
+        maybeSendExternalNotification({
+          userId: chore.assignedWorkerId,
+          email: chore.assignedWorker.email,
+          event: 'payment.recorded',
+          title: 'Payment received',
+          message: `You received $${amountNumber} for "${chore.title}"`,
+          link: `/chores/${chore.id}`,
+          meta: { choreId: chore.id, paymentId: payment.id, amount: amountNumber },
+        }).catch((e) => console.error('External notif error', e))
+      }
     }
 
     return NextResponse.json({ ok: true }, { status: 201 })

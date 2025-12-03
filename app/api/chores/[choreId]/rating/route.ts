@@ -6,6 +6,7 @@ import {
 } from '@/server/api/ratings'
 import { requireAuth } from '@/server/auth/role'
 import { createNotification } from '@/server/api/notifications'
+import { maybeSendExternalNotification } from '@/server/notifications'
 import { NotificationType } from '@prisma/client'
 import { prisma } from '@/server/db/client'
 
@@ -62,6 +63,12 @@ export async function POST(
         id: true,
         title: true,
         assignedWorkerId: true,
+        assignedWorker: {
+          select: {
+            id: true,
+            email: true,
+          },
+        },
       },
     })
 
@@ -83,6 +90,19 @@ export async function POST(
         message: `You received a ${score}/5 rating for "${chore.title}"`,
         link: `/chores/${chore.id}`,
       })
+
+      // Send external notification to worker (non-blocking)
+      if (process.env.PABBLY_WEBHOOK_URL && chore.assignedWorker?.email) {
+        maybeSendExternalNotification({
+          userId: chore.assignedWorkerId,
+          email: chore.assignedWorker.email,
+          event: 'rating.received',
+          title: 'New rating received',
+          message: `You received a ${score}/5 rating for "${chore.title}"`,
+          link: `/chores/${chore.id}`,
+          meta: { choreId: chore.id, ratingId: rating.id, score },
+        }).catch((e) => console.error('External notif error', e))
+      }
     }
 
     return NextResponse.json({ rating }, { status: 201 })
