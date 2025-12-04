@@ -3,19 +3,15 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Menu, X, Plus, Sparkles } from 'lucide-react';
-// TODO: Replace with main repo's Header/Footer or remove if using layout
-// The main repo has Header/Footer at @/components/landing/Header and Footer
-import { Header } from '@/components/landing/Header';
-import { Footer } from '@/components/landing/Footer';
-import { ChoreFiltersSidebar } from '../filters/ChoreFiltersSidebar';
-import { EnhancedChoreCard } from '../cards/EnhancedChoreCard';
-import { SortDropdown } from '../ui/SortDropdown';
-import { EnhancedEmptyState } from '../ui/EnhancedEmptyState';
-import { ChoresSkeletonGrid } from '../ui/ChoresSkeletonGrid';
-import { FiltersChipsBar } from '../filters/FiltersChipsBar';
-import { ViewToggle } from '../ui/ViewToggle';
-import { MapPlaceholder } from '../ui/MapPlaceholder';
-import { Chore, Filters, SortOption, ViewMode } from '../types';
+import { ChoreFiltersSidebar } from './filters/ChoreFiltersSidebar';
+import { EnhancedChoreCard } from './cards/EnhancedChoreCard';
+import { SortDropdown } from './ui/SortDropdown';
+import { EnhancedEmptyState } from './ui/EnhancedEmptyState';
+import { ChoresSkeletonGrid } from './ui/ChoresSkeletonGrid';
+import { FiltersChipsBar } from './filters/FiltersChipsBar';
+import { ViewToggle } from './ui/ViewToggle';
+import { MapPlaceholder } from './ui/MapPlaceholder';
+import { Chore, Filters, SortOption, ViewMode } from './types';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
@@ -56,23 +52,6 @@ export function BrowseChoresPageEnhanced({
   onViewChore: externalOnViewChore,
   onPostChore: externalOnPostChore,
 }: BrowseChoresPageEnhancedProps) {
-  // Theme state
-  const [isDark, setIsDark] = useState(initialTheme === 'dark');
-
-  useEffect(() => {
-    const savedTheme = localStorage.getItem('theme');
-    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    const shouldBeDark = savedTheme === 'dark' || (!savedTheme && prefersDark);
-    setIsDark(shouldBeDark);
-    document.documentElement.classList.toggle('dark', shouldBeDark);
-  }, []);
-
-  const toggleTheme = () => {
-    const newIsDark = !isDark;
-    setIsDark(newIsDark);
-    document.documentElement.classList.toggle('dark', newIsDark);
-    localStorage.setItem('theme', newIsDark ? 'dark' : 'light');
-  };
 
   // Filter state
   const [filters, setFilters] = useState<Filters>(initialFilters);
@@ -176,8 +155,6 @@ export function BrowseChoresPageEnhanced({
 
   return (
     <div className="min-h-screen bg-background text-foreground transition-colors duration-300">
-      <Header isDark={isDark} onToggleTheme={toggleTheme} />
-
       <main className="pt-20">
         {/* Hero Header */}
         <section className="relative overflow-hidden py-8 sm:py-12">
@@ -377,8 +354,6 @@ export function BrowseChoresPageEnhanced({
           </div>
         </div>
       </main>
-
-      <Footer />
     </div>
   );
 }
