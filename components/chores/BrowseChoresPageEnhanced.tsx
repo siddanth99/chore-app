@@ -10,7 +10,8 @@ import { EnhancedEmptyState } from './ui/EnhancedEmptyState';
 import { ChoresSkeletonGrid } from './ui/ChoresSkeletonGrid';
 import { FiltersChipsBar } from './filters/FiltersChipsBar';
 import { ViewToggle } from './ui/ViewToggle';
-import { MapPlaceholder } from './ui/MapPlaceholder';
+import MapPlaceholder from './ui/MapPlaceholder';
+import { useRouter } from 'next/navigation';
 import { Chore, Filters, SortOption, ViewMode } from './types';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -58,6 +59,7 @@ export function BrowseChoresPageEnhanced({
   onViewChore: externalOnViewChore,
   onPostChore: externalOnPostChore,
 }: BrowseChoresPageEnhancedProps) {
+  const router = useRouter();
 
   // Filter state
   const [filters, setFilters] = useState<Filters>(initialFilters);
@@ -302,7 +304,19 @@ export function BrowseChoresPageEnhanced({
             <div className="flex-1 min-w-0">
               {viewMode === 'map' ? (
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  <MapPlaceholder />
+                  <MapPlaceholder
+                    userPos={userPosition ?? null}
+                    radiusKm={filters.radius ?? 5}
+                    visibleChores={filteredChores ?? []}
+                    onMarkerClick={(c) => {
+                      if (externalOnViewChore) {
+                        externalOnViewChore(c.id);
+                      } else {
+                        router.push(`/chores/${c.id}?from=chores`);
+                      }
+                    }}
+                    className="rounded-2xl"
+                  />
                   <div className="space-y-4 max-h-[600px] overflow-y-auto scrollbar-hide">
                     {isLoading ? (
                       <ChoresSkeletonGrid count={4} view="list" />
