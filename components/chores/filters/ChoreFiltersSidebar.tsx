@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, X, MapPin, SlidersHorizontal } from 'lucide-react';
 import { Filters, CATEGORIES, STATUS_OPTIONS } from '../types';
@@ -8,6 +8,16 @@ import RangeSlider from '@/components/ui/RangeSlider';
 import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+
+const DEFAULT_FILTERS: Filters = {
+  q: '',
+  categories: [],
+  type: 'all',
+  minBudget: 0,
+  maxBudget: 10000,
+  status: [],
+  nearMe: false,
+};
 
 interface ChoreFiltersSidebarProps {
   filters: Filters;
@@ -26,10 +36,45 @@ export function ChoreFiltersSidebar({
   onClose,
   isMobile = false,
 }: ChoreFiltersSidebarProps) {
-  const [localFilters, setLocalFilters] = useState<Filters>(filters);
+  const [localFilters, setLocalFilters] = useState<Filters>(() => ({
+    ...DEFAULT_FILTERS,
+    ...(filters || {}),
+  }));
+
+  // Sync localFilters when props.filters change
+  useEffect(() => {
+    setLocalFilters({
+      ...DEFAULT_FILTERS,
+      ...(filters || {}),
+    });
+  }, [filters]);
 
   const updateFilter = useCallback(<K extends keyof Filters>(key: K, value: Filters[K]) => {
     setLocalFilters(prev => ({ ...prev, [key]: value }));
+  }, []);
+
+  const updateFilters = useCallback((patch: Partial<Filters>) => {
+    setLocalFilters(prev => {
+      const updated = { ...prev, ...patch };
+      
+      // Clamp budget values and ensure min <= max
+      if (updated.minBudget !== undefined && updated.minBudget !== null) {
+        updated.minBudget = Math.max(0, Math.min(10000, updated.minBudget));
+      }
+      if (updated.maxBudget !== undefined && updated.maxBudget !== null) {
+        updated.maxBudget = Math.max(0, Math.min(10000, updated.maxBudget));
+      }
+      
+      // Ensure min <= max
+      if (updated.minBudget !== undefined && updated.minBudget !== null &&
+          updated.maxBudget !== undefined && updated.maxBudget !== null) {
+        if (updated.minBudget > updated.maxBudget) {
+          updated.minBudget = updated.maxBudget;
+        }
+      }
+      
+      return updated;
+    });
   }, []);
 
   const toggleCategory = (categoryId: string) => {
@@ -54,9 +99,8 @@ export function ChoreFiltersSidebar({
   };
 
   const handleClear = () => {
-    const cleared: Filters = { q: '', categories: [], type: 'all', minBudget: null, maxBudget: null, status: [], nearMe: false };
-    setLocalFilters(cleared);
-    onChange(cleared);
+    setLocalFilters({ ...DEFAULT_FILTERS });
+    onChange({ ...DEFAULT_FILTERS });
   };
 
   return (
@@ -187,19 +231,58 @@ export function ChoreFiltersSidebar({
             ))}
           </div>
           <RangeSlider
-            value={[localFilters.minBudget ?? 0, localFilters.maxBudget ?? 5000]}
+            value={[localFilters.minBudget ?? 0, localFilters.maxBudget ?? 10000]}
             min={0}
-            max={100000}
+            max={10000}
             step={100}
             onChange={(v) => {
-              updateFilter('minBudget', v[0]);
-              updateFilter('maxBudget', v[1]);
+              updateFilters({ minBudget: v[0], maxBudget: v[1] });
             }}
           />
         </div>
+        <div className="flex items-center gap-2">
+          <div className="flex-1">
+            <label htmlFor="minBudget" className="block text-xs text-muted-foreground mb-1">
+              Min
+            </label>
+            <input
+              id="minBudget"
+              type="number"
+              min={0}
+              max={10000}
+              step={100}
+              value={localFilters.minBudget ?? 0}
+              onChange={(e) => {
+                const value = parseInt(e.target.value, 10) || 0;
+                updateFilters({ minBudget: value });
+              }}
+              className="w-full px-3 py-2 rounded-lg bg-secondary/50 border border-border/50 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
+              aria-label="Minimum budget"
+            />
+          </div>
+          <div className="flex-1">
+            <label htmlFor="maxBudget" className="block text-xs text-muted-foreground mb-1">
+              Max
+            </label>
+            <input
+              id="maxBudget"
+              type="number"
+              min={0}
+              max={10000}
+              step={100}
+              value={localFilters.maxBudget ?? 10000}
+              onChange={(e) => {
+                const value = parseInt(e.target.value, 10) || 10000;
+                updateFilters({ maxBudget: value });
+              }}
+              className="w-full px-3 py-2 rounded-lg bg-secondary/50 border border-border/50 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
+              aria-label="Maximum budget"
+            />
+          </div>
+        </div>
         <div className="flex items-center justify-between text-sm text-muted-foreground" role="status" aria-live="polite">
-          <span aria-label="Minimum budget">${localFilters.minBudget || 0}</span>
-          <span aria-label="Maximum budget">${localFilters.maxBudget || 5000}</span>
+          <span aria-label="Minimum budget value">${localFilters.minBudget ?? 0}</span>
+          <span aria-label="Maximum budget value">${localFilters.maxBudget ?? 10000}</span>
         </div>
       </div>
 
