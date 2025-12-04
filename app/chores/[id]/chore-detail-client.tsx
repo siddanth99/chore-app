@@ -67,13 +67,14 @@ export default function ChoreDetailClient({
   
   // Determine back navigation based on where user came from
   const from = searchParams.get('from')
+  const view = searchParams?.get('view') || (typeof window !== 'undefined' ? localStorage.getItem('choreflow_view_v1') : 'list')
   const backHref = from === 'notifications' 
     ? '/notifications' 
     : from === 'dashboard' 
     ? '/dashboard'
     : from === 'applications'
     ? '/applications'
-    : '/chores'
+    : `/chores?view=${view}`
   const backLabel = from === 'notifications'
     ? '← Back to Notifications'
     : from === 'dashboard'
@@ -574,13 +575,19 @@ export default function ChoreDetailClient({
           Status: {choreStatus} | You are: {currentUser?.role ?? 'Guest'}
         </div>
 
-        {/* Back link - source aware */}
-        <Link
-          href={backHref}
+        {/* Back button - source aware */}
+        <button
+          onClick={() => {
+            if (typeof window !== 'undefined' && window.history.length > 1) {
+              router.back()
+              return
+            }
+            router.push(backHref)
+          }}
           className="mb-4 inline-flex items-center gap-1 text-sm text-primary hover:text-primary/80 transition-colors"
         >
           {backLabel}
-        </Link>
+        </button>
 
         {/* Cancelled Banner */}
         {choreStatus === 'CANCELLED' && (

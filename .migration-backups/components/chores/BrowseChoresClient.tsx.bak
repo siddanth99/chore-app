@@ -1,0 +1,191 @@
+'use client';
+
+import { BrowseChoresPageEnhanced } from './BrowseChoresPageEnhanced';
+import { Chore, Filters } from './types';
+import { useRouter } from 'next/navigation';
+import { useMemo, useState, useEffect, useCallback } from 'react';
+import useUserLocation from '@/lib/hooks/useUserLocation';
+import { haversineDistanceKm } from '@/lib/utils/distance';
+
+const STORAGE_KEY = 'choreflow_filters_v1';
+const VIEW_KEY = 'choreflow_view_v1';
+
+const DEFAULT_FILTERS: Filters = {
+  q: '',
+  categories: [],
+  type: 'all',
+  minBudget: 0,
+  maxBudget: 10000,
+  status: [],
+  nearMe: false,
+  radius: 5,
+  showMap: false,
+};
+
+interface BrowseChoresClientProps {
+  initialChores: any[]; // Prisma chore objects from server
+  initialFilters: Filters;
+}
+
+/**
+ * BrowseChoresClient - Client wrapper for BrowseChoresPageEnhanced
+ * 
+ * Transforms server data to browse-v2 format and handles client-side interactions.
+ * TODO: Implement URL searchParams sync for filters
+ * TODO: Wire up router navigation for onView and onPostChore callbacks
+ */
+export function BrowseChoresClient({
+  initialChores,
+  initialFilters,
+}: BrowseChoresClientProps) {
+  const router = useRouter();
+
+  // Transform Prisma chores to browse-v2 Chore format
+  const transformedChores: Chore[] = useMemo(() => {
+    return initialChores.map((chore) => ({
+      id: chore.id,
+      title: chore.title,
+      description: chore.description,
+      category: chore.category.toLowerCase(),
+      budget: chore.budget,
+      currency: '$',
+      type: chore.type === 'ONLINE' ? 'online' : 'offline',
+      status: mapStatus(chore.status),
+      location: chore.locationAddress || undefined,
+      imageUrl: chore.imageUrl || undefined,
+      createdAt: chore.createdAt.toISOString(),
+      applications: chore._count?.applications || 0,
+      author: chore.createdBy?.name || undefined,
+      lat: chore.locationLat || null,
+      lng: chore.locationLng || null,
+    }));
+  }, [initialChores]);
+
+  // User location hook
+  const { position: userPos, loading: userLoading, error: userError, requestLocation } = useUserLocation();
+
+  // Initialize filters from localStorage or defaults
+  const [filters, setFilters] = useState(() => {
+    try {
+      const saved = typeof window !== 'undefined' && localStorage.getItem(STORAGE_KEY);
+      if (saved) return JSON.parse(saved);
+    } catch (e) { /* ignore */ }
+    return initialFilters ?? { ...DEFAULT_FILTERS, radius: 5 };
+  });
+
+  // Initialize viewMode from URL or localStorage (supports 'tiles', 'grid', 'list', 'map')
+  const initialView = (() => {
+    if (typeof window === 'undefined') return 'grid';
+    try {
+      const urlView = new URLSearchParams(window.location.search).get('view');
+      const saved = localStorage.getItem(VIEW_KEY);
+      if (urlView) {
+        if (urlView === 'tiles' || urlView === 'grid') return 'grid';
+        if (urlView === 'map' || urlView === 'list') return urlView;
+      }
+      if (saved) {
+        if (saved === 'tiles' || saved === 'grid') return 'grid';
+        if (saved === 'map' || saved === 'list') return saved;
+      }
+      return 'grid'; // Default to grid/tiles view
+    } catch (e) {
+      return 'grid';
+    }
+  })();
+
+  const [viewMode, setViewMode] = useState<'map'|'list'|'grid'>(initialView);
+
+  // Persist filters to localStorage
+  useEffect(() => {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(filters)) } catch (e) {}
+  }, [filters]);
+
+  // Persist viewMode and reflect in URL (replace state, no navigation)
+  useEffect(() => {
+    try { localStorage.setItem(VIEW_KEY, viewMode) } catch (e) {}
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      params.set('view', viewMode === 'grid' ? 'tiles' : viewMode); // Use 'tiles' in URL for grid
+      const newUrl = `${window.location.pathname}?${params.toString()}`;
+      window.history.replaceState({}, '', newUrl);
+    }
+  }, [viewMode]);
+
+  // Clear filters function
+  function clearFilters() {
+    const reset = { ...DEFAULT_FILTERS, radius: 5 };
+    setFilters(reset);
+    try { localStorage.removeItem(STORAGE_KEY) } catch (e) {}
+  }
+
+  // Request location whenever near-me or map view is active
+  useEffect(() => {
+    if (filters.nearMe || viewMode === 'map') {
+      if (!userPos && !userLoading) {
+        requestLocation();
+      }
+    }
+  }, [filters.nearMe, viewMode, userPos, userLoading, requestLocation]);
+
+  const handleViewChore = (id: string) => {
+    router.push(`/chores/${id}`);
+  };
+
+  const handlePostChore = () => {
+    router.push('/chores/new');
+  };
+
+  // Create chore list with transformed coordinates
+  const choresWithCoords = useMemo(() => {
+    return transformedChores.map(c => ({
+      ...c,
+      lat: c.lat ?? null,
+      lng: c.lng ?? null,
+    }));
+  }, [transformedChores]);
+
+  // Apply basic filtering (no radius yet - that's done in visibleChoresInRadius)
+  const filteredChores = useMemo(() => {
+    return choresWithCoords;
+  }, [choresWithCoords]);
+
+  // Compute visible chores within radius
+  const visibleChoresInRadius = useMemo(() => {
+    const r = Number(filters.radius ?? 0);
+    if (!userPos || r <= 0) return filteredChores;
+    const uLat = userPos.lat, uLng = userPos.lng;
+    return filteredChores.filter(c => c.lat != null && c.lng != null && haversineDistanceKm(uLat, uLng, c.lat, c.lng) <= r + 0.0001);
+  }, [filteredChores, filters.radius, userPos]);
+
+  return (
+    <BrowseChoresPageEnhanced
+      chores={filteredChores}
+      visibleChoresInRadius={visibleChoresInRadius}
+      filters={filters}
+      onFiltersChange={setFilters}
+      clearFilters={clearFilters}
+      userPosition={userPos}
+      userLocationError={userError}
+      viewMode={viewMode}
+      setViewMode={setViewMode}
+      onViewChore={handleViewChore}
+      onPostChore={handlePostChore}
+    />
+  );
+}
+
+// Map Prisma ChoreStatus to browse-v2 status format
+function mapStatus(status: string): 'published' | 'in_progress' | 'completed' {
+  switch (status) {
+    case 'PUBLISHED':
+      return 'published';
+    case 'IN_PROGRESS':
+    case 'ASSIGNED':
+      return 'in_progress';
+    case 'COMPLETED':
+      return 'completed';
+    default:
+      return 'published';
+  }
+}
+

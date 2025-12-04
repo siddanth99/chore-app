@@ -278,23 +278,13 @@ const SUGGESTED_CATEGORIES = [
 export function CategorySelect({ 
   value, 
   onChange,
-  disabled = false,
-  categories = CATEGORIES
+  disabled = false
 }: { 
-  value: string; // Category ID/slug
-  onChange: (value: string) => void; // Returns category ID
+  value: string; 
+  onChange: (value: string) => void;
   disabled?: boolean;
-  categories?: Array<{ id: string; label: string; icon: React.ElementType; color: string }>; // Allow server-provided categories
 }) {
-  const categoryList = categories || CATEGORIES;
-  // Find selected category by ID first, then by label (for backward compatibility)
-  const selectedCategory = categoryList.find(c => c.id === value || c.label.toLowerCase() === value.toLowerCase());
-  
-  // Map suggested category labels to category IDs
-  const suggestedCategoryIds = SUGGESTED_CATEGORIES.map(label => {
-    const cat = categoryList.find(c => c.label.toLowerCase() === label.toLowerCase());
-    return cat ? { id: cat.id, label: cat.label } : null;
-  }).filter(Boolean) as { id: string; label: string }[];
+  const selectedCategory = CATEGORIES.find(c => c.label.toLowerCase() === value.toLowerCase());
   
   return (
     <motion.div variants={itemVariants} className="space-y-3">
@@ -304,15 +294,15 @@ export function CategorySelect({
       
       {/* Suggested category pills */}
       <div className="flex flex-wrap gap-2">
-        {suggestedCategoryIds.map((cat) => {
-          const isSelected = value === cat.id || value.toLowerCase() === cat.label.toLowerCase();
-          const categoryData = categoryList.find(c => c.id === cat.id);
+        {SUGGESTED_CATEGORIES.map((cat) => {
+          const isSelected = value.toLowerCase() === cat.toLowerCase();
+          const categoryData = CATEGORIES.find(c => c.label.toLowerCase() === cat.toLowerCase());
           
           return (
             <button
-              key={cat.id}
+              key={cat}
               type="button"
-              onClick={() => !disabled && onChange(cat.id)}
+              onClick={() => !disabled && onChange(cat)}
               disabled={disabled}
               className={cn(
                 "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all",
@@ -326,24 +316,18 @@ export function CategorySelect({
               {categoryData && (
                 <categoryData.icon className={cn("w-3.5 h-3.5", isSelected ? "" : categoryData.color)} />
               )}
-              {cat.label}
+              {cat}
             </button>
           );
         })}
       </div>
       
-      {/* Custom category input - stores as ID if matches, otherwise as custom label */}
+      {/* Custom category input */}
       <div className="relative">
         <Input
           type="text"
-          value={selectedCategory?.label || value}
-          onChange={(e) => {
-            const inputValue = e.target.value;
-            // Try to find matching category by label
-            const matched = categoryList.find(c => c.label.toLowerCase() === inputValue.toLowerCase());
-            // If match found, use ID; otherwise use the input value (custom category)
-            onChange(matched ? matched.id : inputValue);
-          }}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
           placeholder="Or type a custom category..."
           disabled={disabled}
           className={cn(

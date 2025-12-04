@@ -37,8 +37,15 @@ export const createChoreSchema = z.object({
   
   imageUrl: z
     .string()
-    .url('Image URL must be a valid URL')
-    .max(500, 'Image URL is too long')
+    .refine(
+      (val) => {
+        if (!val) return true
+        // Accept both data URLs (base64) and regular URLs
+        return val.startsWith('data:image') || val.startsWith('http://') || val.startsWith('https://') || val.startsWith('/')
+      },
+      { message: 'Image URL must be a valid URL or data URL' }
+    )
+    .max(500000, 'Image URL is too long') // Base64 data URLs can be long (compressed ~300KB = ~400KB base64)
     .nullable()
     .optional(),
   
@@ -126,8 +133,15 @@ export const updateChoreSchema = z.object({
   
   imageUrl: z
     .string()
-    .url('Image URL must be a valid URL')
-    .max(500, 'Image URL is too long')
+    .refine(
+      (val) => {
+        if (!val) return true
+        // Accept both data URLs (base64) and regular URLs
+        return val.startsWith('data:image') || val.startsWith('http://') || val.startsWith('https://') || val.startsWith('/')
+      },
+      { message: 'Image URL must be a valid URL or data URL' }
+    )
+    .max(500000, 'Image URL is too long') // Base64 data URLs can be long (compressed ~300KB = ~400KB base64)
     .nullable()
     .optional(),
   

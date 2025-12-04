@@ -20,32 +20,33 @@ export function Hero() {
   return (
     <section className="relative overflow-hidden py-16 sm:py-24 lg:py-32">
       {/* Background gradient */}
-      <div className="absolute inset-0 bg-hero-gradient" />
-      <div className="absolute top-0 left-1/4 w-96 h-96 bg-primary/10 rounded-full blur-3xl" />
-      <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-accent/10 rounded-full blur-3xl" />
+      <div className="absolute inset-0 bg-hero-gradient z-10 pointer-events-none" aria-hidden="true" />
+      <div className="absolute inset-0 hero-overlay-soft pointer-events-none z-10" aria-hidden="true" />
+      <div className="absolute top-0 left-1/4 w-96 h-96 bg-primary/10 rounded-full blur-3xl z-10 pointer-events-none" aria-hidden="true" />
+      <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-accent/10 rounded-full blur-3xl z-10 pointer-events-none" aria-hidden="true" />
       
       <div className="container relative mx-auto px-4 sm:px-6 lg:px-8">
         <div className="grid lg:grid-cols-2 gap-12 lg:gap-16 items-center">
           {/* Text Content */}
-          <div className="text-center lg:text-left space-y-6 fade-up">
-            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight">
+          <div className="text-center lg:text-left space-y-6 fade-up relative z-20">
+            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-foreground">
               Get Everyday Chores Done —{' '}
               <span className="gradient-text">Fast & Trusted</span>
             </h1>
-            <p className="text-lg sm:text-xl text-muted-foreground max-w-xl mx-auto lg:mx-0">
+            <p className="text-lg sm:text-xl text-foreground/90 max-w-xl mx-auto lg:mx-0">
               Connect with verified local helpers for any task. From lawn care to furniture assembly, 
               get it done quickly and securely.
             </p>
             
-            <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start fade-up fade-up-delay-1">
+            <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start fade-up fade-up-delay-1 relative z-40">
               <Button
                 size="lg"
-                className="text-base font-semibold px-8 py-6 shadow-glow hover:shadow-glow-lg transition-shadow"
+                className="inline-flex items-center gap-3 px-6 py-3 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold shadow-lg focus:outline-none focus:ring-2 focus:ring-indigo-400 z-40 relative hero-primary-cta"
                 onClick={handlePostChore}
                 aria-label="Post a new chore"
               >
                 Post a Chore
-                <svg className="ml-2 w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                 </svg>
               </Button>
@@ -87,7 +88,7 @@ export function Hero() {
           </div>
 
           {/* Illustration */}
-          <div className="fade-up fade-up-delay-3">
+          <div className="fade-up fade-up-delay-3 opacity-100 pointer-events-auto z-20">
             <IllustrationHero />
           </div>
         </div>
