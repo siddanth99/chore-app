@@ -41,12 +41,19 @@ export function ChoreFiltersSidebar({
     ...(filters || {}),
   }));
 
+  // Text states for free-form budget inputs
+  const [minText, setMinText] = useState<string>(String(localFilters.minBudget ?? 0));
+  const [maxText, setMaxText] = useState<string>(String(localFilters.maxBudget ?? 10000));
+
   // Sync localFilters when props.filters change
   useEffect(() => {
-    setLocalFilters({
+    const updated = {
       ...DEFAULT_FILTERS,
       ...(filters || {}),
-    });
+    };
+    setLocalFilters(updated);
+    setMinText(String(updated.minBudget ?? 0));
+    setMaxText(String(updated.maxBudget ?? 10000));
   }, [filters]);
 
   const updateFilter = useCallback(<K extends keyof Filters>(key: K, value: Filters[K]) => {
@@ -71,6 +78,14 @@ export function ChoreFiltersSidebar({
         if (updated.minBudget > updated.maxBudget) {
           updated.minBudget = updated.maxBudget;
         }
+      }
+      
+      // Sync text inputs with clamped values
+      if (updated.minBudget !== undefined && updated.minBudget !== null) {
+        setMinText(String(updated.minBudget));
+      }
+      if (updated.maxBudget !== undefined && updated.maxBudget !== null) {
+        setMaxText(String(updated.maxBudget));
       }
       
       return updated;
@@ -247,14 +262,20 @@ export function ChoreFiltersSidebar({
             </label>
             <input
               id="minBudget"
-              type="number"
-              min={0}
-              max={10000}
-              step={100}
-              value={localFilters.minBudget ?? 0}
+              type="text"
+              inputMode="numeric"
+              value={minText}
               onChange={(e) => {
-                const value = parseInt(e.target.value, 10) || 0;
-                updateFilters({ minBudget: value });
+                setMinText(e.target.value);
+              }}
+              onBlur={() => {
+                const numValue = parseInt(minText, 10);
+                if (!isNaN(numValue)) {
+                  updateFilters({ minBudget: numValue });
+                } else {
+                  // If invalid, reset to current filter value
+                  setMinText(String(localFilters.minBudget ?? 0));
+                }
               }}
               className="w-full px-3 py-2 rounded-lg bg-secondary/50 border border-border/50 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
               aria-label="Minimum budget"
@@ -266,14 +287,20 @@ export function ChoreFiltersSidebar({
             </label>
             <input
               id="maxBudget"
-              type="number"
-              min={0}
-              max={10000}
-              step={100}
-              value={localFilters.maxBudget ?? 10000}
+              type="text"
+              inputMode="numeric"
+              value={maxText}
               onChange={(e) => {
-                const value = parseInt(e.target.value, 10) || 10000;
-                updateFilters({ maxBudget: value });
+                setMaxText(e.target.value);
+              }}
+              onBlur={() => {
+                const numValue = parseInt(maxText, 10);
+                if (!isNaN(numValue)) {
+                  updateFilters({ maxBudget: numValue });
+                } else {
+                  // If invalid, reset to current filter value
+                  setMaxText(String(localFilters.maxBudget ?? 10000));
+                }
               }}
               className="w-full px-3 py-2 rounded-lg bg-secondary/50 border border-border/50 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
               aria-label="Maximum budget"
