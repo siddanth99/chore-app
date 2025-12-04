@@ -94,12 +94,22 @@ export async function createChore(input: CreateChoreInput): Promise<NextResponse
     dueAt: input.dueAt,
   })
 
-  // If validation failed, return the NextResponse with structured errors
-  if (!validation.ok) {
-    return validation
+  // Narrow the validation result safely.
+  // If validation is a NextResponse (error), return it.
+  // If it's { ok: true, data }, proceed.
+  // If it's unexpected or falsy, return a fallback error.
+  if (!validation || typeof validation !== "object") {
+    return NextResponse.json(
+      { ok: false, message: "Validation failed" },
+      { status: 400 }
+    )
   }
 
-  const validatedInput = validation.data
+  if (!("data" in validation)) {
+    return validation as NextResponse
+  }
+
+  const validatedInput = (validation as { ok: true; data: any }).data
 
   return prisma.chore.create({
     data: {
