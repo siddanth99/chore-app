@@ -17,7 +17,6 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/components/ui/toast';
 import { haversineDistanceKm } from '@/lib/utils/distance';
-import { priceWithinRange } from '@/lib/utils/filters';
 
 interface BrowseChoresPageEnhancedProps {
   chores?: Chore[] | null;
@@ -31,10 +30,6 @@ interface BrowseChoresPageEnhancedProps {
   setViewMode: (v: 'map'|'list'|'grid') => void;
   onViewChore?: (id: string) => void;
   onPostChore?: () => void;
-  categories?: Array<{ id: string; label: string }>;
-  serverCategories?: Array<{ id: string; label: string }>;
-  initialCount?: number;
-  initialTotalCount?: number;
 }
 
 /**
@@ -71,10 +66,6 @@ export function BrowseChoresPageEnhanced({
   setViewMode,
   onViewChore: externalOnViewChore,
   onPostChore: externalOnPostChore,
-  initialCount = 0,
-  initialTotalCount,
-  categories,
-  serverCategories = categories,
 }: BrowseChoresPageEnhancedProps) {
   const router = useRouter();
   const { info } = useToast();
@@ -108,8 +99,13 @@ export function BrowseChoresPageEnhanced({
       result = result.filter(c => c.type === filters.type);
     }
 
-    // Budget filter: use helper function that includes chores with missing price when no filter is active
-    result = result.filter(c => priceWithinRange(c, filters?.minBudget ?? null, filters?.maxBudget ?? null));
+    if (filters.minBudget) {
+      result = result.filter(c => c.budget && c.budget >= filters.minBudget!);
+    }
+
+    if (filters.maxBudget) {
+      result = result.filter(c => c.budget && c.budget <= filters.maxBudget!);
+    }
 
     if (filters.status?.length) {
       result = result.filter(c => filters.status!.includes(c.status));
@@ -170,28 +166,9 @@ export function BrowseChoresPageEnhanced({
     }
   }, [externalOnPostChore]);
 
-  // Keep server-rendered count stable to avoid hydration mismatch:
-  // - initialTotalCount is rendered on server
-  // - after mount we compute totalCount and update
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  // initialTotalCount should come from props (server snapshot)
-  const serverCount = initialTotalCount ?? (chores ? chores.length : 0);
-
   const isLoading = chores === null || chores === undefined;
   const isEmpty = filteredChores?.length === 0;
-  // totalCount is the current computed count (client-filtered)
   const totalCount = filteredChores?.length || 0;
-
-  // Display serverCount during SSR / initial client render to avoid mismatch
-  // Show server snapshot until client mount to avoid hydration mismatch
-  const displayCountText = isLoading
-    ? 'Loading...'
-    : `${mounted ? totalCount : (initialTotalCount ?? totalCount)} chores available`;
   
   // Currency formatter for Indian Rupees
   const formatINR = (value?: number | string | null) => {
@@ -233,7 +210,7 @@ export function BrowseChoresPageEnhanced({
 
   return (
     <div className="min-h-screen bg-background text-foreground transition-colors duration-300">
-      <main className="pt-8">
+      <main className="pt-20">
         {/* Hero Header */}
         <section className="relative overflow-hidden py-8 sm:py-12">
           {/* Animated background */}
@@ -266,9 +243,9 @@ export function BrowseChoresPageEnhanced({
                   className="flex items-center gap-2 mt-2"
                 >
                   <span className="text-muted-foreground">
-                    {displayCountText}
+                    {isLoading ? 'Loading...' : `${totalCount} chores available`}
                   </span>
-                  {!isLoading && (mounted ? totalCount : serverCount) > 0 && (
+                  {!isLoading && totalCount > 0 && (
                     <motion.span
                       initial={{ scale: 0 }}
                       animate={{ scale: 1 }}
@@ -447,7 +424,7 @@ export function BrowseChoresPageEnhanced({
                                   </div>
                                 </div>
                                 <div className="text-right ml-4 flex-shrink-0">
-                                  {formatINR(c.budget ?? (c as any).price ?? (c as any).quote ?? (c as any).amount) || '—'}
+                                  {formatINR(c.budget)}
                                 </div>
                               </div>
                             </li>
@@ -473,7 +450,6 @@ export function BrowseChoresPageEnhanced({
                       view="compact"
                       index={i}
                       onView={handleViewChore}
-                      categories={serverCategories || categories}
                     />
                   ))}
                 </div>
@@ -487,7 +463,6 @@ export function BrowseChoresPageEnhanced({
                       view="card"
                       index={i}
                       onView={handleViewChore}
-                      categories={serverCategories || categories}
                     />
                   ))}
                 </div>

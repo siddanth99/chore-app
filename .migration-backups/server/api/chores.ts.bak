@@ -167,13 +167,7 @@ export async function getChoreById(id: string) {
 
 // List published chores with simple filters
 export async function listPublishedChoresWithFilters(
-  filters: { 
-    type?: ChoreType; 
-    location?: string; 
-    category?: string;
-    minBudget?: number | null;
-    maxBudget?: number | null;
-  },
+  filters: { type?: ChoreType; location?: string; category?: string },
   excludeUserId?: string,
 ) {
   const where: any = {
@@ -196,22 +190,6 @@ export async function listPublishedChoresWithFilters(
     where.category = {
       contains: filters.category,
       mode: 'insensitive',
-    }
-  }
-
-  // Only add budget filters when min/max are provided
-  // This ensures chores with null budget are included when no filter is active
-  if (filters.minBudget != null || filters.maxBudget != null) {
-    const budgetConditions: any[] = [];
-    if (filters.minBudget != null) {
-      budgetConditions.push({ budget: { gte: Number(filters.minBudget) } });
-    }
-    if (filters.maxBudget != null) {
-      budgetConditions.push({ budget: { lte: Number(filters.maxBudget) } });
-    }
-    if (budgetConditions.length > 0) {
-      where.AND = where.AND || [];
-      where.AND.push(...budgetConditions);
     }
   }
 

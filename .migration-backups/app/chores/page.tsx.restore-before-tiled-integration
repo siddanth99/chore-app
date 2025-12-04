@@ -21,7 +21,6 @@ type RawSearchParams = {
   minBudget?: string
   maxBudget?: string
   status?: string | string[]
-  view?: string // View mode: tiles, grid, list, map
 }
 
 export default async function ChoresPage({
@@ -33,13 +32,7 @@ export default async function ChoresPage({
   const resolved = await searchParams
 
   // Build server-side filters (for Prisma query)
-  const serverFilters: { 
-    type?: ChoreType; 
-    location?: string; 
-    category?: string;
-    minBudget?: number | null;
-    maxBudget?: number | null;
-  } = {}
+  const serverFilters: { type?: ChoreType; location?: string; category?: string } = {}
 
   if (resolved.type === 'ONLINE' || resolved.type === 'OFFLINE') {
     serverFilters.type = resolved.type as ChoreType
@@ -51,14 +44,6 @@ export default async function ChoresPage({
 
   if (resolved.category) {
     serverFilters.category = resolved.category
-  }
-
-  // Add budget filters to server query if provided
-  if (resolved.minBudget) {
-    serverFilters.minBudget = parseFloat(resolved.minBudget);
-  }
-  if (resolved.maxBudget) {
-    serverFilters.maxBudget = parseFloat(resolved.maxBudget);
   }
 
   const user = await getCurrentUser()
@@ -81,32 +66,12 @@ export default async function ChoresPage({
     distanceKm >= 0
 
   // Fetch chores and categories in parallel
-  const [chores, categoriesFromDb] = await Promise.all([
+  const [chores, categories] = await Promise.all([
     isDistanceFilterActive
       ? getChoresWithinDistance(workerLat, workerLng, distanceKm, excludeUserId)
       : listPublishedChoresWithFilters(serverFilters, excludeUserId),
     getUniqueCategories(),
   ])
-
-  // Fetch categories from API (normalized with IDs)
-  let categories: Array<{ id: string; label: string }> = []
-  try {
-    const categoriesRes = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/api/categories`, {
-      cache: 'no-store',
-    })
-    if (categoriesRes.ok) {
-      const data = await categoriesRes.json()
-      if (data.ok && Array.isArray(data.categories)) {
-        categories = data.categories
-      }
-    }
-  } catch (e) {
-    // Fallback: derive from DB categories
-    categories = categoriesFromDb.map(cat => ({
-      id: cat.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, ''),
-      label: cat,
-    }))
-  }
 
   // Transform URL params to browse-v2 Filters format
   const browseV2Filters: Filters = {
@@ -134,22 +99,10 @@ export default async function ChoresPage({
     nearMe: isDistanceFilterActive,
   }
 
-  // View param is handled client-side by BrowseChoresClient (reads from URL on mount)
-
-  // Compute a server-side snapshot count for visible chores.
-  // Use the full chores list length as the initial count (client will update after mount).
-  const initialCount = Array.isArray(chores) ? chores.length : 0;
-  
-  // Compute totalCount server-side (count of chores matching server filters)
-  const initialTotalCount = Array.isArray(chores) ? chores.length : 0;
-
   return (
     <BrowseChoresClient
       initialChores={chores}
       initialFilters={browseV2Filters}
-      initialCategories={categories}
-      initialCount={initialCount}
-      initialTotalCount={initialTotalCount}
     />
   )
 }

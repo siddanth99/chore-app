@@ -34,7 +34,7 @@ export function CTABanner() {
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Button
               size="lg"
-              className="bg-white text-primary hover:bg-white/90 text-base font-semibold px-8 py-6 shadow-lg"
+              className="inline-flex items-center gap-3 px-6 py-3 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold shadow-lg focus:outline-none focus:ring-2 focus:ring-indigo-400 z-40 relative hero-primary-cta"
               onClick={handlePostChore}
               aria-label="Post your first chore"
             >

@@ -1,9 +1,7 @@
 'use client';
 
-import { motion, AnimatePresence } from 'framer-motion';
-import { X } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
 import { Filters, CATEGORIES, STATUS_OPTIONS } from '../types';
-import { cn } from '@/lib/utils';
 
 interface FiltersChipsBarProps {
   filters: Filters;
@@ -11,12 +9,19 @@ interface FiltersChipsBarProps {
   onClearAll: () => void;
 }
 
+type ActiveFilter = {
+  key?: string;
+  label: string;
+  value?: string;
+};
+
 /**
  * FiltersChipsBar - A horizontal bar showing active filters as removable chips.
  * Animates chips in/out when filters change.
  */
 export function FiltersChipsBar({ filters, onRemove, onClearAll }: FiltersChipsBarProps) {
-  const activeFilters: { key: keyof Filters; label: string; value?: string }[] = [];
+  // Compute active filters from filters prop
+  const activeFilters: ActiveFilter[] = [];
 
   // Search query
   if (filters.q) {
@@ -58,46 +63,75 @@ export function FiltersChipsBar({ filters, onRemove, onClearAll }: FiltersChipsB
 
   if (activeFilters.length === 0) return null;
 
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: -10 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="flex flex-wrap items-center gap-2 mb-6 sticky top-20 z-10 py-2 bg-background/80 backdrop-blur-sm"
-    >
-      <span className="text-sm text-muted-foreground mr-2">Active filters:</span>
-      
-      <AnimatePresence mode="popLayout">
-        {activeFilters.map((filter, index) => (
-          <motion.button
-            key={`${filter.key}-${filter.value || index}`}
-            initial={{ opacity: 0, scale: 0.8, x: -10 }}
-            animate={{ opacity: 1, scale: 1, x: 0 }}
-            exit={{ opacity: 0, scale: 0.8, x: 10 }}
-            transition={{ duration: 0.2 }}
-            onClick={() => onRemove(filter.key, filter.value)}
-            className={cn(
-              'group flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium',
-              'bg-primary/10 text-primary hover:bg-primary/20 transition-colors',
-              'focus:outline-none focus:ring-2 focus:ring-primary/50'
-            )}
-            aria-label={`Remove filter: ${filter.label}`}
-          >
-            {filter.label}
-            <X className="w-3 h-3 opacity-60 group-hover:opacity-100 transition-opacity" />
-          </motion.button>
-        ))}
-      </AnimatePresence>
+  // Adapt onRemove to work with removeFilter signature
+  const removeFilter = (keyOrLabel: string) => {
+    const filter = activeFilters.find(f => (f.key ?? f.label) === keyOrLabel);
+    if (filter) {
+      onRemove(filter.key as keyof Filters, filter.value);
+    }
+  };
 
-      {activeFilters.length > 1 && (
-        <motion.button
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          onClick={onClearAll}
-          className="text-sm text-muted-foreground hover:text-foreground transition-colors ml-2"
-        >
-          Clear all
-        </motion.button>
-      )}
-    </motion.div>
-  );
+  // Use stable component for rendering
+  return <FiltersChipsBarStable activeFilters={activeFilters} removeFilter={removeFilter} />;
 }
+
+/* ---------- stable FiltersChipsBar render (server + client identical DOM) ---------- */
+
+const FiltersChipsBarStable: React.FC<{
+  activeFilters: Array<{ label: string; key?: string }>;
+  removeFilter: (keyOrLabel: string) => void;
+}> = ({ activeFilters, removeFilter }) => {
+  // mounted only toggles a class on the client to trigger CSS transitions.
+  // The DOM (structure & number of nodes) remains identical on server and client.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    const t = requestAnimationFrame(() => setMounted(true));
+    return () => cancelAnimationFrame(t);
+  }, []);
+
+  // base classes always present on server and client
+  const containerClassBase =
+    'flex flex-wrap items-center gap-2 mb-6 sticky top-20 z-10 py-2 bg-background/80 backdrop-blur-sm';
+  // mounted toggles a visual class only
+  const mountedClass = mounted ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-1';
+  const containerClass = `${containerClassBase} ${mountedClass}`;
+
+  return (
+    <div className={containerClass} aria-hidden="false">
+      <span className="text-sm text-muted-foreground mr-2">Active filters:</span>
+
+      {/* Render chips identically on server and client — no conditional adding/removing */}
+      <div className="flex flex-wrap items-center gap-2">
+        {activeFilters.length === 0 ? (
+          <span className="text-sm text-muted-foreground">None</span>
+        ) : (
+          activeFilters.map((f, i) => {
+            const key = f.key ?? `${f.label}-${i}`;
+            return (
+              <div
+                key={key}
+                className="inline-flex items-center gap-2 px-2 py-1 rounded-full bg-muted text-sm transition-transform duration-150"
+                role="listitem"
+                aria-label={`filter-${key}`}
+              >
+                <span className="whitespace-nowrap overflow-hidden text-ellipsis max-w-[10rem]">
+                  {f.label}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => removeFilter(f.key ?? f.label)}
+                  className="ml-2 inline-flex items-center justify-center w-6 h-6 rounded-full hover:bg-muted/60"
+                  aria-label={`Remove ${f.label}`}
+                >
+                  ×
+                </button>
+              </div>
+            );
+          })
+        )}
+      </div>
+    </div>
+  );
+};
+
+/* ---------- end stable render ---------- */

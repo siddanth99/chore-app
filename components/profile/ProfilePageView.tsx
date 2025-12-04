@@ -9,6 +9,16 @@ import Button from '@/components/ui/button'
 import Card from '@/components/ui/Card'
 import { formatDate, cn } from '@/lib/utils'
 
+type ApiFieldErrors = { fieldErrors?: Record<string, string[]> }
+
+type ApiErrorShape = {
+  ok?: false
+  details?: ApiFieldErrors
+  fieldErrors?: Record<string, string[]>
+  message?: string
+  globalError?: string
+}
+
 interface ProfilePageViewProps {
   profile: {
     id: string
@@ -172,16 +182,15 @@ export default function ProfilePageView({
       })
 
       if (!response.ok) {
-        let json = {}
-        try {
-          json = await response.json()
-        } catch (e) {
-          return { ok: false, globalError: 'Failed to save profile' }
-        }
+        const json = await response.json().catch(() => ({})) as ApiErrorShape | { ok?: true } | any
 
-        // Check for structured validation errors
-        if (json?.details?.fieldErrors) {
-          return { ok: false, fieldErrors: json.details.fieldErrors }
+        const fieldErrors = json?.details?.fieldErrors ?? json?.fieldErrors
+
+        if (fieldErrors) {
+          return { ok: false, fieldErrors }
+        } else {
+          const errMsg = json?.globalError ?? json?.message ?? 'Failed to save profile'
+          return { ok: false, globalError: errMsg }
         }
 
         if (json?.errors?.fieldErrors) {

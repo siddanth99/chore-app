@@ -1,61 +1,86 @@
 'use client'
 
-import React from 'react'
+import React, { useEffect, useState } from "react";
 
 type Props = {
-  value: number
-  min?: number
-  max?: number
-  step?: number
-  onChange: (v: number) => void
-}
+  value: number; // current radius in km
+  onChange: (v: number) => void;
+  min?: number;
+  max?: number;
+  step?: number;
+  id?: string;
+};
 
 export default function LocationRadiusSlider({
-  value,
-  min = 1,
-  max = 50,
-  step = 1,
+  value = 5,
   onChange,
+  min = 0,
+  max = 200,
+  step = 1,
+  id = "location-radius",
 }: Props) {
-  return (
-    <div className="mt-4">
-      <label htmlFor="location-radius" className="text-sm font-medium text-muted-foreground">
-        Location radius (km)
-      </label>
+  // text state allows free typing (so user can clear and type "20")
+  const [text, setText] = useState(() => (value || value === 0 ? String(value) : "5"));
 
-      <div className="flex items-center gap-3 mt-2">
+  // keep text in sync when external value changes
+  useEffect(() => {
+    setText(value || value === 0 ? String(value) : "");
+  }, [value]);
+
+  function commitText() {
+    // remove non-digits, allow empty
+    const cleaned = text.trim().replace(/[^\d]/g, "");
+    if (cleaned === "") {
+      // treat empty as 0 or no filter -- choose 0 (no radius)
+      onChange(0);
+      setText("0");
+      return;
+    }
+    let n = Number(cleaned);
+    if (Number.isNaN(n)) n = 0;
+    n = Math.max(min, Math.min(max, Math.round(n)));
+    onChange(n);
+    setText(String(n));
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex items-center gap-4">
         <input
-          id="location-radius"
+          aria-label="Location radius slider"
+          id={id}
           type="range"
           min={min}
           max={max}
           step={step}
-          value={value}
-          onChange={(e) => onChange(Number(e.target.value))}
+          value={value ?? 0}
+          onChange={(e) => onChange(Math.round(Number(e.target.value)))}
           className="w-full"
-          aria-label="Location radius in kilometers"
         />
-        <div className="w-24">
-          <input
-            type="number"
-            min={min}
-            max={max}
-            step={step}
-            value={value}
-            onChange={(e) => {
-              const v = Number(e.target.value || min)
-              if (!Number.isNaN(v)) onChange(Math.max(min, Math.min(max, v)))
-            }}
-            className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-            aria-label="Location radius value in kilometres"
-          />
-        </div>
+        <input
+          aria-label="Radius (km) numeric"
+          inputMode="numeric"
+          pattern="[0-9]*"
+          className="w-20 p-2 rounded-md bg-background border border-border text-foreground"
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onBlur={() => commitText()}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              commitText();
+              (e.target as HTMLInputElement).blur();
+            }
+            if (e.key === "Escape") {
+              // revert to current numeric value
+              setText(value || value === 0 ? String(value) : "");
+            }
+          }}
+        />
       </div>
-
-      <p className="text-xs text-muted-foreground mt-2">
-        Show chores within {value} km of your location.
+      <p className="text-sm text-muted-foreground">
+        Show chores within {value ?? 0} km of your location.
       </p>
     </div>
-  )
+  );
 }
 

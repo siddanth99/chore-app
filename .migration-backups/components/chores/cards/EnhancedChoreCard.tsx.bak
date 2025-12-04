@@ -5,60 +5,12 @@ import { motion, useMotionValue, useSpring, useTransform } from 'framer-motion';
 import { MapPin, Clock, Users, ArrowRight } from 'lucide-react';
 import { Chore, CATEGORIES } from '../types';
 import { cn } from '@/lib/utils';
-import { normalizeKey, findCategoryByChore, type CategoryItem } from '../utils/category';
-import { parsePriceValue } from '@/lib/utils/filters';
-
-// Robust category lookup function
-function findCategoryForChore(chore: Chore | null | undefined, categories: CategoryItem[] = []) {
-  // categories: [{id, label}, ...]
-  // chore.category may be {id,label} or a string id or a label string
-  if (!chore) return categories[0] ?? { id: 'uncategorized', label: 'Uncategorized', icon: '📋' };
-
-  // Check for categoryData property first (from transformed chores)
-  if ((chore as any).categoryData) {
-    const catData = (chore as any).categoryData;
-    if (catData && typeof catData === 'object' && catData.id) {
-      const found = categories.find(c => c.id === catData.id);
-      if (found) return found;
-      return {
-        id: catData.id,
-        label: catData.label ?? catData.name ?? catData.id,
-        icon: '📋'
-      };
-    }
-  }
-
-  // if chore.category is object with id (type assertion needed)
-  const categoryValue = (chore as any).category;
-  if (categoryValue && typeof categoryValue === 'object' && categoryValue.id) {
-    const found = categories.find(c => c.id === categoryValue.id);
-    return found ?? { 
-      id: categoryValue.id, 
-      label: categoryValue.label ?? categoryValue.name ?? categoryValue.id,
-      icon: '📋'
-    };
-  }
-
-  // if chore.category is string, try match id first
-  if (typeof chore.category === 'string') {
-    const byId = categories.find(c => c.id === chore.category);
-    if (byId) return byId;
-
-    // try normalize by label
-    const norm = (s?: string) => (s || '').toLowerCase().replace(/[^a-z0-9]+/g, '_');
-    const byLabel = categories.find(c => norm(c.label) === norm(chore.category));
-    if (byLabel) return byLabel;
-  }
-
-  return categories[0] ?? { id: 'uncategorized', label: 'Uncategorized', icon: '📋' };
-}
 
 interface EnhancedChoreCardProps {
   chore: Chore;
   view?: 'card' | 'compact';
   index?: number;
   onView?: (id: string) => void;
-  categories?: CategoryItem[];
 }
 
 /**
@@ -70,7 +22,6 @@ export function EnhancedChoreCard({
   view = 'card',
   index = 0,
   onView,
-  categories: propCategories,
 }: EnhancedChoreCardProps) {
   const [isHovered, setIsHovered] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
@@ -96,21 +47,20 @@ export function EnhancedChoreCard({
     setIsHovered(false);
   };
 
-  // Use propCategories if provided, otherwise fallback to CATEGORIES
-  const categoriesList: CategoryItem[] = propCategories && propCategories.length > 0
-    ? propCategories.map(c => ({
-        id: c.id,
-        label: c.label,
-        icon: typeof c.icon === 'string' ? c.icon : (c.icon || '📋'),
-      }))
-    : CATEGORIES.map(c => ({
-        id: c.id,
-        label: c.label,
-        icon: c.icon,
-      }));
+  // Normalize category key for robust matching
+  function normalizeKey(s?: string) {
+    return (s || '').toLowerCase().trim().replace(/[^a-z0-9]+/g, '-');
+  }
 
-  // Use robust category lookup
-  const category = findCategoryForChore(chore, categoriesList);
+  const choreCategoryRaw = (chore.category || (chore as any).categoryId || (chore as any).categoryName || '').toString();
+  const normalized = normalizeKey(choreCategoryRaw);
+
+  // try match by id, then by title, then by includes
+  const category =
+    CATEGORIES.find(c => c.id === normalized) ||
+    CATEGORIES.find(c => normalizeKey(c.label) === normalized) ||
+    CATEGORIES.find(c => normalizeKey(c.label).includes(normalized) || normalized.includes(normalizeKey(c.label))) ||
+    CATEGORIES[0];
   const timeAgo = getTimeAgo(chore.createdAt);
   const statusLabel = chore.status === 'published' ? 'Open' : chore.status === 'in_progress' ? 'In Progress' : 'Done';
 
@@ -135,7 +85,7 @@ export function EnhancedChoreCard({
       >
         {/* Thumbnail or Avatar */}
         <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center flex-shrink-0">
-          <span className="text-xl">{typeof category.icon === 'string' ? category.icon : category.icon ? <category.icon className="w-5 h-5" /> : '📋'}</span>
+          <span className="text-xl">{category.icon}</span>
         </div>
 
         {/* Content */}
@@ -156,9 +106,11 @@ export function EnhancedChoreCard({
 
         {/* Budget & Action */}
         <div className="flex items-center gap-3">
-          <span className="px-3 py-1 rounded-full bg-accent/20 text-accent font-semibold text-sm">
-            {formatPrice(chore.budget ?? (chore as any).price ?? null)}
-          </span>
+          {chore.budget && (
+            <span className="px-3 py-1 rounded-full bg-accent/20 text-accent font-semibold text-sm">
+              ${chore.budget}
+            </span>
+          )}
           <motion.button
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
@@ -214,7 +166,7 @@ export function EnhancedChoreCard({
           {/* Category Badge on Image */}
           <div className="absolute top-3 left-3">
             <span className="px-3 py-1 rounded-full bg-card/80 backdrop-blur-sm text-sm font-medium flex items-center gap-1.5">
-              {typeof category.icon === 'string' ? <span>{category.icon}</span> : category.icon ? <category.icon className="w-4 h-4" /> : <span>📋</span>}
+              <span>{category.icon}</span>
               {category.label}
             </span>
           </div>
@@ -233,12 +185,12 @@ export function EnhancedChoreCard({
         </div>
       ) : (
         <div className="h-32 bg-gradient-to-br from-primary/10 via-accent/10 to-highlight/10 relative flex items-center justify-center">
-          <span className="text-4xl opacity-50">{typeof category.icon === 'string' ? category.icon : category.icon ? <category.icon className="w-8 h-8" /> : '📋'}</span>
+          <span className="text-4xl opacity-50">{category.icon}</span>
           
           {/* Category Badge */}
           <div className="absolute top-3 left-3">
             <span className="px-3 py-1 rounded-full bg-card/80 backdrop-blur-sm text-sm font-medium flex items-center gap-1.5">
-              {typeof category.icon === 'string' ? <span>{category.icon}</span> : category.icon ? <category.icon className="w-4 h-4" /> : <span>📋</span>}
+              <span>{category.icon}</span>
               {category.label}
             </span>
           </div>
@@ -295,9 +247,13 @@ export function EnhancedChoreCard({
         {/* Footer */}
         <div className="flex items-center justify-between pt-3 border-t border-border/50">
           {/* Budget */}
-          <span className="px-4 py-1.5 rounded-full bg-accent/20 text-accent font-bold text-sm">
-            {formatPrice(chore, chore.currency)}
-          </span>
+          {chore.budget ? (
+            <span className="px-4 py-1.5 rounded-full bg-accent/20 text-accent font-bold text-sm">
+              {chore.currency || '$'}{chore.budget}
+            </span>
+          ) : (
+            <span className="text-sm text-muted-foreground italic">Budget flexible</span>
+          )}
 
           {/* Type Badge */}
           <span className={cn(
@@ -337,14 +293,4 @@ function getTimeAgo(dateString: string): string {
   if (diffHours < 24) return `${diffHours}h ago`;
   if (diffDays < 7) return `${diffDays}d ago`;
   return date.toLocaleDateString();
-}
-
-function formatPrice(chore: any, currency: string = '$'): string {
-  const v = parsePriceValue(chore);
-  if (v == null) return '—';
-  // Use INR formatting for Indian Rupees, otherwise use simple format
-  if (currency === '₹' || currency === 'INR') {
-    return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(v);
-  }
-  return `${currency}${v}`;
 }

@@ -17,9 +17,7 @@ import {
   ImageUploadZone,
   DateTimeInput,
   itemVariants,
-  CATEGORIES,
 } from '@/components/chores/LovableCreateChorePage'
-import { Leaf } from 'lucide-react'
 import { MapPin, AlertCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import {
@@ -55,7 +53,6 @@ export default function ChoreForm({ mode, initialChore }: ChoreFormProps) {
   const [imageUrl, setImageUrl] = useState<string>('')
   const [imagePreview, setImagePreview] = useState<string>('')
   const [uploadingImage, setUploadingImage] = useState(false)
-  const [categories, setCategories] = useState<Array<{ id: string; label: string }>>([])
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -67,21 +64,6 @@ export default function ChoreForm({ mode, initialChore }: ChoreFormProps) {
     locationLng: '',
     dueAt: '',
   })
-
-  // Fetch categories on mount
-  useEffect(() => {
-    fetch('/api/categories')
-      .then(res => res.json())
-      .then(data => {
-        if (data.ok && Array.isArray(data.categories)) {
-          setCategories(data.categories)
-        }
-      })
-      .catch(() => {
-        // Fallback to empty array
-        setCategories([])
-      })
-  }, [])
 
   // Pre-fill form when in edit mode
   useEffect(() => {
@@ -425,15 +407,6 @@ export default function ChoreForm({ mode, initialChore }: ChoreFormProps) {
               }
             }}
             disabled={categoryDisabled}
-            categories={categories.length > 0 ? categories.map(c => {
-              const match = CATEGORIES.find(cat => cat.id === c.id);
-              return {
-                id: c.id,
-                label: c.label,
-                icon: match?.icon || Leaf,
-                color: match?.color || 'text-muted-foreground',
-              };
-            }) : undefined}
           />
           {fieldErrors.category && (
             <motion.p

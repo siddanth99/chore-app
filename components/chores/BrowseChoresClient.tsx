@@ -3,13 +3,32 @@
 import { BrowseChoresPageEnhanced } from './BrowseChoresPageEnhanced';
 import { Chore, Filters } from './types';
 import { useRouter } from 'next/navigation';
-import { useMemo, useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import useUserLocation from '@/lib/hooks/useUserLocation';
 import { haversineDistanceKm } from '@/lib/utils/distance';
+import { priceWithinRange } from '@/lib/utils/filters';
+
+const STORAGE_KEY = 'choreflow_filters_v1';
+const VIEW_KEY = 'choreflow_view_v1';
+
+const DEFAULT_FILTERS: Filters = {
+  q: '',
+  categories: [],
+  type: 'all',
+  minBudget: 0,
+  maxBudget: 10000,
+  status: [],
+  nearMe: false,
+  radius: 5,
+  showMap: false,
+};
 
 interface BrowseChoresClientProps {
   initialChores: any[]; // Prisma chore objects from server
   initialFilters: Filters;
+  initialCategories?: Array<{ id: string; label: string }>;
+  initialCount?: number;
+  initialTotalCount?: number;
 }
 
 /**
@@ -19,19 +38,33 @@ interface BrowseChoresClientProps {
  * TODO: Implement URL searchParams sync for filters
  * TODO: Wire up router navigation for onView and onPostChore callbacks
  */
-export function BrowseChoresClient({
-  initialChores,
-  initialFilters,
-}: BrowseChoresClientProps) {
+export function BrowseChoresClient(props: BrowseChoresClientProps) {
   const router = useRouter();
+
+  /**
+   * Important: initialize state from server props only.
+   * Do NOT read localStorage or window during initial render — only from useEffect.
+   */
+  const initialViewFromProps = (props.initialFilters as any)?.view ?? 'grid';
+
+  const [viewMode, setViewMode] = useState<'grid'|'list'|'map'>(() => initialViewFromProps);
+
+  // Filters: derive initial filters directly from props (server snapshot)
+  const [filters, setFilters] = useState(() => {
+    // clone to avoid accidental mutation
+    return { ...(props.initialFilters || {}), radius: (props.initialFilters?.radius ?? 5) }
+  });
+
+  // chores: start with server snapshot
+  const [chores, setChores] = useState(() => props.initialChores ?? []);
 
   // Transform Prisma chores to browse-v2 Chore format
   const transformedChores: Chore[] = useMemo(() => {
-    return initialChores.map((chore) => ({
+    return chores.map((chore) => ({
       id: chore.id,
       title: chore.title,
       description: chore.description,
-      category: chore.category.toLowerCase(),
+      category: typeof chore.category === 'string' ? chore.category.toLowerCase() : (chore.category?.id || chore.category?.label || 'uncategorized'),
       budget: chore.budget,
       currency: '$',
       type: chore.type === 'ONLINE' ? 'online' : 'offline',
@@ -43,43 +76,100 @@ export function BrowseChoresClient({
       author: chore.createdBy?.name || undefined,
       lat: chore.locationLat || null,
       lng: chore.locationLng || null,
+      // Preserve original category data if it's an object
+      categoryData: typeof chore.category === 'object' ? chore.category : undefined,
     }));
-  }, [initialChores]);
+  }, [chores]);
+
+  // Compute categories from chores payload (server snapshot)
+  const categoriesFromChores = React.useMemo(() => {
+    const map = new Map<string, { id: string; label: string }>();
+    (props.initialChores || []).forEach(c => {
+      if (!c) return;
+      // assume c.category may be object or string; normalize:
+      if (typeof c.category === 'object' && c.category?.id) {
+        map.set(c.category.id, { 
+          id: c.category.id, 
+          label: c.category.label ?? c.category.name ?? c.category.id 
+        });
+      } else if (typeof c.category === 'string') {
+        // If backend stores id string only, we may not have label — use id as label for now
+        const normalized = c.category.toLowerCase().trim();
+        if (!map.has(normalized)) {
+          map.set(normalized, { id: normalized, label: c.category });
+        }
+      }
+    });
+    return Array.from(map.values());
+  }, [props.initialChores]);
 
   // User location hook
   const { position: userPos, loading: userLoading, error: userError, requestLocation } = useUserLocation();
-  
-  // Track if location has been requested
-  const [locationRequested, setLocationRequested] = useState(false);
 
-  // Filter chores by radius when nearMe is enabled
-  const [filters, setFilters] = useState<Filters>(initialFilters);
-  const visibleChores = useMemo(() => {
-    if (!filters.nearMe || !userPos || !filters.radius) {
-      return transformedChores;
-    }
-
-    return transformedChores.filter((chore) => {
-      if (typeof chore.lat !== 'number' || typeof chore.lng !== 'number') {
-        return false;
-      }
-      const distance = haversineDistanceKm(
-        userPos.lat,
-        userPos.lng,
-        chore.lat,
-        chore.lng
-      );
-      return distance <= (filters.radius ?? 5);
-    });
-  }, [transformedChores, filters.nearMe, filters.radius, userPos]);
-
-  // Request location when nearMe is toggled on or map view is selected
+  // Persisted view/filters sync should run after mount only
   useEffect(() => {
-    if ((filters.nearMe || filters.showMap) && !locationRequested && !userPos && !userLoading) {
-      setLocationRequested(true);
-      requestLocation();
+    // Now that we are mounted, we can safely read localStorage and sync
+    try {
+      const storedFiltersRaw = typeof window !== 'undefined' ? localStorage.getItem(STORAGE_KEY) : null;
+      if (storedFiltersRaw) {
+        const storedFilters = JSON.parse(storedFiltersRaw);
+        // Only apply stored filters if they actually differ (avoid unnecessary rerender)
+        setFilters(prev => ({ ...prev, ...(storedFilters || {}) }));
+      }
+      const storedView = typeof window !== 'undefined' ? localStorage.getItem(VIEW_KEY) : null;
+      if (storedView && (storedView === 'grid' || storedView === 'list' || storedView === 'map')) {
+        // update viewMode on client after mount (this will not cause hydration mismatch)
+        setViewMode(storedView);
+      }
+    } catch (e) {
+      // fail silently — do not change the server-provided initial render
+      console.warn('BrowseChoresClient: localStorage sync failed', e);
     }
-  }, [filters.nearMe, filters.showMap, locationRequested, userPos, userLoading, requestLocation]);
+  }, []);
+
+  // Save filters and view changes to localStorage after they happen (client-only)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(filters));
+      localStorage.setItem(VIEW_KEY, viewMode);
+    } catch (e) {
+      console.warn('BrowseChoresClient: failed to persist filters', e);
+    }
+  }, [filters, viewMode]);
+
+  // Update URL when viewMode changes (client-only)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const params = new URLSearchParams(window.location.search);
+      params.set('view', viewMode === 'grid' ? 'tiles' : viewMode); // Use 'tiles' in URL for grid
+      const newUrl = `${window.location.pathname}?${params.toString()}`;
+      window.history.replaceState({}, '', newUrl);
+    } catch (e) {
+      // ignore URL update errors
+    }
+  }, [viewMode]);
+
+  // Clear filters function
+  function clearFilters() {
+    const reset = { ...DEFAULT_FILTERS, radius: 5 };
+    setFilters(reset);
+    try { 
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem(STORAGE_KEY);
+      }
+    } catch (e) {}
+  }
+
+  // Request location whenever near-me or map view is active
+  useEffect(() => {
+    if (filters.nearMe || viewMode === 'map') {
+      if (!userPos && !userLoading) {
+        requestLocation();
+      }
+    }
+  }, [filters.nearMe, viewMode, userPos, userLoading, requestLocation]);
 
   const handleViewChore = (id: string) => {
     router.push(`/chores/${id}`);
@@ -89,15 +179,84 @@ export function BrowseChoresClient({
     router.push('/chores/new');
   };
 
+  // Create chore list with transformed coordinates
+  const choresWithCoords = useMemo(() => {
+    return transformedChores.map(c => ({
+      ...c,
+      lat: c.lat ?? null,
+      lng: c.lng ?? null,
+    }));
+  }, [transformedChores]);
+
+  // compute filtered chores on the client using chores + filters (this uses stable chores state initialized from server)
+  const filteredChores = useMemo(() => {
+    // Apply price filtering
+    let result = choresWithCoords.filter(c => priceWithinRange(c, filters?.minBudget ?? null, filters?.maxBudget ?? null));
+    
+    // Apply other filters (search, category, type, status, etc.)
+    if (filters.q) {
+      const q = filters.q.toLowerCase();
+      result = result.filter(c => 
+        c.title.toLowerCase().includes(q) || 
+        c.description.toLowerCase().includes(q)
+      );
+    }
+    
+    if (filters.categories?.length) {
+      result = result.filter(c => 
+        filters.categories!.includes(c.category.toLowerCase())
+      );
+    }
+    
+    if (filters.type && filters.type !== 'all') {
+      result = result.filter(c => c.type === filters.type);
+    }
+    
+    if (filters.status?.length) {
+      result = result.filter(c => filters.status!.includes(c.status));
+    }
+    
+    return result;
+  }, [choresWithCoords, filters]);
+
+  // Compute visible chores within radius
+  const visibleChoresInRadius = useMemo(() => {
+    const r = Number(filters.radius ?? 0);
+    if (!userPos || r <= 0) return filteredChores;
+    const uLat = userPos.lat, uLng = userPos.lng;
+    return filteredChores.filter(c => c.lat != null && c.lng != null && haversineDistanceKm(uLat, uLng, c.lat, c.lng) <= r + 0.0001);
+  }, [filteredChores, filters.radius, userPos]);
+
+  // Merge server categories from chores with initialCategories prop
+  const serverCategories = useMemo(() => {
+    const merged = new Map<string, { id: string; label: string }>();
+    // Add categories from chores first
+    categoriesFromChores.forEach(cat => merged.set(cat.id, cat));
+    // Add initialCategories (from API) if not already present
+    (props.initialCategories || []).forEach(cat => {
+      if (!merged.has(cat.id)) {
+        merged.set(cat.id, cat);
+      }
+    });
+    return Array.from(merged.values());
+  }, [categoriesFromChores, props.initialCategories]);
+
   return (
     <BrowseChoresPageEnhanced
-      chores={visibleChores}
-      initialFilters={filters}
-      onFiltersChange={setFilters}
+      chores={filteredChores}
+      visibleChoresInRadius={visibleChoresInRadius}
+      filters={filters}
+      onFiltersChange={(f: Filters) => setFilters(f as typeof filters)}
+      clearFilters={clearFilters}
       userPosition={userPos}
       userLocationError={userError}
+      viewMode={viewMode}
+      setViewMode={setViewMode}
       onViewChore={handleViewChore}
       onPostChore={handlePostChore}
+      categories={serverCategories}
+      initialCount={props.initialCount}
+      initialTotalCount={props.initialChores?.length ?? 0}
     />
   );
 }

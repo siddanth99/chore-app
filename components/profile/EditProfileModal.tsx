@@ -8,6 +8,13 @@ import {
 } from '@/lib/validation/image'
 import { compressImage } from '@/lib/utils/image'
 
+type ApiErrorResponse = {
+  ok: false
+  fieldErrors?: Record<string, string[]>
+  globalError?: string
+  message?: string
+}
+
 interface EditProfileModalProps {
   isOpen: boolean
   onClose: () => void
@@ -215,14 +222,15 @@ export default function EditProfileModal({
     }
 
     try {
-      const res = await onSave(payload)
+      const result = await onSave(payload)
 
-      if (!res?.ok) {
-        if (res?.fieldErrors) {
-          setFieldErrors(res.fieldErrors)
+      if (!result?.ok) {
+        const err = result as ApiErrorResponse
+        if (err?.fieldErrors) {
+          setFieldErrors(err.fieldErrors)
         } else {
           // Check for image upload error message
-          const errorMsg = res?.globalError || res?.message || 'Failed to save profile'
+          const errorMsg = err?.globalError ?? err?.message ?? 'Failed to save profile'
           setGlobalError(errorMsg)
         }
         setSaving(false)

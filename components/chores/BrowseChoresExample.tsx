@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { BrowseChoresPageEnhanced } from './BrowseChoresPageEnhanced';
-import { Chore } from './types';
+import { Chore, Filters } from './types';
 
 /**
  * SAMPLE CHORES DATA
@@ -206,11 +206,19 @@ const SAMPLE_CHORES: Chore[] = [
  */
 export function BrowseChoresExample() {
   const [chores] = useState<Chore[]>(SAMPLE_CHORES);
+  const defaultFilters: Filters = { q: '', categories: [], type: 'all', minBudget: null, maxBudget: null, status: [], nearMe: false, radius: 5, showMap: false };
+  const [filters, setFilters] = useState<Filters>(defaultFilters);
+  const [viewMode, setViewMode] = useState<'map' | 'list' | 'grid'>('grid');
 
   return (
     <BrowseChoresPageEnhanced
       chores={chores}
-      initialFilters={{}}
+      visibleChoresInRadius={chores}
+      filters={filters}
+      onFiltersChange={(f: Filters) => setFilters(f)}
+      clearFilters={() => setFilters(defaultFilters)}
+      viewMode={viewMode}
+      setViewMode={setViewMode}
     />
   );
 }
