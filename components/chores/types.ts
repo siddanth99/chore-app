@@ -17,6 +17,8 @@ export type Chore = {
   createdAt: string;
   applications?: number;
   author?: string;
+  lat?: number | null;
+  lng?: number | null;
 };
 
 export type Filters = {
@@ -27,6 +29,8 @@ export type Filters = {
   maxBudget?: number | null;
   status?: string[];
   nearMe?: boolean;
+  radius?: number;
+  showMap?: boolean;
 };
 
 export type SortOption = 'newest' | 'budget_high' | 'budget_low' | 'distance';

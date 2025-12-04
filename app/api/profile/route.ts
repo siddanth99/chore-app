@@ -4,6 +4,9 @@ import { requireAuth, getHttpStatusForAuthError, isAuthError, AuthorizationError
 import { updateProfileSchema } from '@/lib/validation/profile.schema'
 import { profileUpdateLimiter, getRateLimitKey, createRateLimitResponse } from '@/lib/rate-limit'
 
+// Note: In Next.js App Router, body size limits are handled by the runtime
+// For large payloads (base64 images), ensure the deployment platform allows sufficient body size
+
 /**
  * GET /api/profile
  * Fetch the authenticated user's OWN profile
@@ -75,13 +78,21 @@ export async function POST(request: Request) {
       )
     }
 
-    const body = await request.json()
+    let body
+    try {
+      body = await request.json()
+    } catch (error) {
+      return NextResponse.json(
+        { ok: false, message: 'Invalid request body' },
+        { status: 400 }
+      )
+    }
 
     // Validate input with Zod schema
     const parsed = updateProfileSchema.safeParse(body)
     if (!parsed.success) {
       return NextResponse.json(
-        { error: 'Validation failed', details: parsed.error.flatten() },
+        { ok: false, error: 'Validation failed', details: parsed.error.flatten() },
         { status: 400 }
       )
     }
@@ -116,26 +127,37 @@ export async function POST(request: Request) {
     }
 
     // Update the user profile
-    const updatedProfile = await prisma.user.update({
-      where: { id: userId },
-      data: updateData,
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        role: true,
-        bio: true,
-        avatarUrl: true,
-        baseLocation: true,
-        phone: true,
-        skills: true,
-        hourlyRate: true,
-        createdAt: true,
-        updatedAt: true,
-      },
-    })
+    try {
+      const updatedProfile = await prisma.user.update({
+        where: { id: userId },
+        data: updateData,
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          role: true,
+          bio: true,
+          avatarUrl: true,
+          baseLocation: true,
+          phone: true,
+          skills: true,
+          hourlyRate: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      })
 
-    return NextResponse.json({ profile: updatedProfile })
+      return NextResponse.json({ profile: updatedProfile })
+    } catch (dbError: any) {
+      // Handle database errors (e.g., image too large for column)
+      if (dbError.code === 'P2000' || dbError.message?.includes('too large')) {
+        return NextResponse.json(
+          { ok: false, message: 'Image upload failed. Please try again.' },
+          { status: 400 }
+        )
+      }
+      throw dbError
+    }
   } catch (error: any) {
     console.error('[API] POST /api/profile error:', error)
     
@@ -144,12 +166,12 @@ export async function POST(request: Request) {
       try {
         const validationErrors = JSON.parse(error.message)
         return NextResponse.json(
-          { error: 'Validation failed', details: validationErrors },
+          { ok: false, error: 'Validation failed', details: validationErrors },
           { status: 400 }
         )
       } catch {
         return NextResponse.json(
-          { error: error.message || 'Invalid input' },
+          { ok: false, error: error.message || 'Invalid input' },
           { status: 400 }
         )
       }
@@ -158,10 +180,24 @@ export async function POST(request: Request) {
     // Return proper HTTP status for auth errors
     if (isAuthError(error)) {
       const status = getHttpStatusForAuthError(error)
-      return NextResponse.json({ error: error.message || 'Unauthorized' }, { status })
+      return NextResponse.json(
+        { ok: false, error: error.message || 'Unauthorized' },
+        { status }
+      )
     }
     
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    // Handle image processing errors
+    if (error.message?.includes('image') || error.message?.includes('upload')) {
+      return NextResponse.json(
+        { ok: false, message: 'Image upload failed. Please try again.' },
+        { status: 400 }
+      )
+    }
+    
+    return NextResponse.json(
+      { ok: false, error: 'Internal server error' },
+      { status: 500 }
+    )
   }
 }
 

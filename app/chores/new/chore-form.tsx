@@ -24,6 +24,7 @@ import {
   validateImageFile,
   IMAGE_VALIDATION_ERRORS,
 } from '@/lib/validation/image'
+import { compressImage } from '@/lib/utils/image'
 
 interface ChoreFormProps {
   mode: 'create' | 'edit'
@@ -43,10 +44,12 @@ interface ChoreFormProps {
   }
 }
 
+
 export default function ChoreForm({ mode, initialChore }: ChoreFormProps) {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({})
   const [imageUrl, setImageUrl] = useState<string>('')
   const [imagePreview, setImagePreview] = useState<string>('')
   const [uploadingImage, setUploadingImage] = useState(false)
@@ -109,6 +112,13 @@ export default function ChoreForm({ mode, initialChore }: ChoreFormProps) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
+    setFieldErrors({})
+
+    // Client-side validation: require description length >= 10 (only for create mode)
+    if (mode === 'create' && formData.description.trim().length < 10) {
+      setFieldErrors({ description: ['Description must be at least 10 characters'] })
+      return
+    }
     
     // Validate OFFLINE chores must have coordinates (only for create or when type is editable)
     if (formData.type === 'OFFLINE' && !typeDisabled) {
@@ -118,6 +128,12 @@ export default function ChoreForm({ mode, initialChore }: ChoreFormProps) {
       }
     }
     
+    // Validate compressed image if present
+    if (imageUrl && (!imageUrl.startsWith('data:image') || imageUrl.length === 0)) {
+      setError('Invalid image. Please upload a valid picture.')
+      return
+    }
+
     setLoading(true)
 
     try {
@@ -141,7 +157,7 @@ export default function ChoreForm({ mode, initialChore }: ChoreFormProps) {
         body.locationLat = formData.locationLat ? parseFloat(formData.locationLat) : null
         body.locationLng = formData.locationLng ? parseFloat(formData.locationLng) : null
         body.dueAt = formData.dueAt || null
-        body.imageUrl = imageUrl && imageUrl.trim() ? imageUrl : null
+        body.imageUrl = imageUrl || null
       } else {
         // Edit mode: send only allowed fields based on status
         if (isDraftOrPublished) {
@@ -174,12 +190,39 @@ export default function ChoreForm({ mode, initialChore }: ChoreFormProps) {
         body: JSON.stringify(body),
       })
 
-      const data = await response.json()
-
       if (!response.ok) {
-        setError(data.error || `Failed to ${mode === 'create' ? 'create' : 'update'} chore`)
+        let json
+        try {
+          json = await response.json()
+        } catch (err) {
+          setError(`Failed to ${mode === 'create' ? 'create' : 'update'} chore — please try again`)
+          return
+        }
+
+        // If server returned structured errors
+        if (json?.errors?.fieldErrors) {
+          setFieldErrors(json.errors.fieldErrors)
+          // Optionally show form-level errors
+          if (json.errors.formErrors && json.errors.formErrors.length > 0) {
+            setError(json.errors.formErrors[0])
+          }
+        } else if (json?.message) {
+          // Check if it's an image-related error
+          const errorMsg = json.message
+          if (errorMsg.toLowerCase().includes('image') || errorMsg.toLowerCase().includes('upload')) {
+            setError('Image upload failed. Please try again.')
+          } else {
+            setError(errorMsg)
+          }
+        } else if (json?.error) {
+          setError(json.error)
+        } else {
+          setError(`Failed to ${mode === 'create' ? 'create' : 'update'} chore`)
+        }
         return
       }
+
+      const result = await response.json()
 
       // Redirect based on mode
       if (mode === 'create') {
@@ -199,59 +242,55 @@ export default function ChoreForm({ mode, initialChore }: ChoreFormProps) {
   ) => {
     const { name, value } = e.target
     setFormData((prev) => ({ ...prev, [name]: value }))
+    // Clear server-side field error when user types
+    if (fieldErrors[name]) {
+      setFieldErrors((prev) => {
+        const newErrors = { ...prev }
+        delete newErrors[name]
+        return newErrors
+      })
+    }
   }
 
   const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
 
+    // Clear any previous error
+    setError('')
+
     // Client-side validation using shared utility
     const validationError = validateImageFile(file)
     if (validationError) {
       setError(validationError)
-      setImagePreview('')  // Clear preview on invalid file
+      setImagePreview('')
       setImageUrl('')
-      // Reset file input so the same file can be re-selected after fixing
       e.target.value = ''
       return
     }
 
-    // Clear any previous error
-    setError('')
-
-    // Show preview
-    const reader = new FileReader()
-    reader.onloadend = () => {
-      setImagePreview(reader.result as string)
-    }
-    reader.readAsDataURL(file)
-
-    // Upload file
+    // Compress image before storing
     setUploadingImage(true)
-    
     try {
-      const uploadFormData = new FormData()
-      uploadFormData.append('file', file)
-
-      const response = await fetch('/api/upload', {
-        method: 'POST',
-        body: uploadFormData,
-      })
-
-      const data = await response.json()
-
-      if (!response.ok) {
-        setError(data.error || IMAGE_VALIDATION_ERRORS.UPLOAD_FAILED)
+      const compressedBase64 = await compressImage(file)
+      
+      if (!compressedBase64) {
+        setError('Image upload failed. Please try another image.')
         setImagePreview('')
         setImageUrl('')
+        e.target.value = ''
+        setUploadingImage(false)
         return
       }
 
-      setImageUrl(data.url)
+      // Store compressed base64 string directly
+      setImagePreview(compressedBase64)
+      setImageUrl(compressedBase64)
     } catch (err) {
-      setError(IMAGE_VALIDATION_ERRORS.UPLOAD_FAILED)
+      setError('Image upload failed. Please try another image.')
       setImagePreview('')
       setImageUrl('')
+      e.target.value = ''
     } finally {
       setUploadingImage(false)
     }
@@ -320,6 +359,7 @@ export default function ChoreForm({ mode, initialChore }: ChoreFormProps) {
           onChange={handleChange}
           disabled={titleDisabled}
           required
+          error={fieldErrors.title?.[0]}
         />
 
         {/* Description */}
@@ -331,9 +371,18 @@ export default function ChoreForm({ mode, initialChore }: ChoreFormProps) {
           value={formData.description}
           onChange={handleChange}
           disabled={descriptionDisabled}
-          maxLength={1000}
+          minLength={10}
+          maxLength={4000}
           required
+          error={fieldErrors.description?.[0]}
+          aria-invalid={!!fieldErrors.description || (formData.description.length > 0 && formData.description.length < 10)}
+          aria-describedby={fieldErrors.description ? 'description-error description-help' : 'description-help'}
         />
+        {formData.description.length > 0 && formData.description.length < 10 && !fieldErrors.description && (
+          <div className="text-yellow-600 text-sm" role="alert" id="description-help">
+            Description must be at least 10 characters
+          </div>
+        )}
 
         {/* Type Toggle */}
         <ChoreTypeToggle
@@ -343,17 +392,51 @@ export default function ChoreForm({ mode, initialChore }: ChoreFormProps) {
         />
 
         {/* Category - with suggested presets and custom input */}
-        <CategorySelect
-          value={formData.category}
-          onChange={(value) => setFormData((prev) => ({ ...prev, category: value }))}
-          disabled={categoryDisabled}
-        />
+        <div className="space-y-2">
+          <CategorySelect
+            value={formData.category}
+            onChange={(value) => {
+              setFormData((prev) => ({ ...prev, category: value }))
+              // Clear server-side field error when user types
+              if (fieldErrors.category) {
+                setFieldErrors((prev) => {
+                  const newErrors = { ...prev }
+                  delete newErrors.category
+                  return newErrors
+                })
+              }
+            }}
+            disabled={categoryDisabled}
+          />
+          {fieldErrors.category && (
+            <motion.p
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              className="text-sm text-destructive flex items-center gap-1"
+            >
+              <AlertCircle className="w-3 h-3" />
+              {fieldErrors.category[0]}
+            </motion.p>
+          )}
+        </div>
 
         {/* Budget */}
         <BudgetInput
           value={formData.budget}
-          onChange={(value) => setFormData((prev) => ({ ...prev, budget: value }))}
+          onChange={(value) => {
+            setFormData((prev) => ({ ...prev, budget: value }))
+            // Clear server-side field error when user types
+            if (fieldErrors.budget) {
+              setFieldErrors((prev) => {
+                const newErrors = { ...prev }
+                delete newErrors.budget
+                return newErrors
+              })
+            }
+          }}
           disabled={budgetDisabled}
+          error={fieldErrors.budget?.[0]}
         />
 
         {/* Image Upload */}

@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Search, X, MapPin, SlidersHorizontal } from 'lucide-react';
 import { Filters, CATEGORIES, STATUS_OPTIONS } from '../types';
 import RangeSlider from '@/components/ui/RangeSlider';
+import LocationRadiusSlider from '@/components/ui/LocationRadiusSlider';
 import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -17,6 +18,8 @@ const DEFAULT_FILTERS: Filters = {
   maxBudget: 10000,
   status: [],
   nearMe: false,
+  radius: 5,
+  showMap: false,
 };
 
 interface ChoreFiltersSidebarProps {

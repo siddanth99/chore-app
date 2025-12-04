@@ -6,6 +6,7 @@ import {
   validateImageFile,
   IMAGE_VALIDATION_ERRORS,
 } from '@/lib/validation/image'
+import { compressImage } from '@/lib/utils/image'
 
 interface EditProfileModalProps {
   isOpen: boolean
@@ -29,7 +30,7 @@ interface EditProfileModalProps {
     skills: string[]
     hourlyRate: number | null
     avatarUrl?: string | null
-  }) => Promise<void>
+  }) => Promise<{ ok: true; profile: any } | { ok: false; fieldErrors?: Record<string, string[]>; globalError?: string }>
 }
 
 export default function EditProfileModal({
@@ -52,7 +53,10 @@ export default function EditProfileModal({
     profile.avatarUrl
   )
   const [errors, setErrors] = useState<Record<string, string>>({})
-  const [isSaving, setIsSaving] = useState(false)
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({})
+  const [error, setError] = useState<string | null>(null)
+  const [globalError, setGlobalError] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
   const [showSuccess, setShowSuccess] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const modalRef = useRef<HTMLDivElement>(null)
@@ -68,6 +72,9 @@ export default function EditProfileModal({
       setHourlyRate(profile.hourlyRate?.toString() || '')
       setAvatarPreview(profile.avatarUrl)
       setErrors({})
+      setFieldErrors({})
+      setError(null)
+      setGlobalError(null)
       setShowSuccess(false)
     }
   }, [isOpen, profile])
@@ -121,7 +128,7 @@ export default function EditProfileModal({
     }
   }, [isOpen, onClose])
 
-  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
 
@@ -129,19 +136,30 @@ export default function EditProfileModal({
     const validationError = validateImageFile(file)
     if (validationError) {
       setErrors({ ...errors, avatar: validationError })
-      setAvatarPreview(null)  // Clear preview on invalid file
-      // Reset file input so the same file can be re-selected after fixing
+      setAvatarPreview(null)
       e.target.value = ''
       return
     }
 
-    // Read file as data URL and store in avatarPreview for persistence
-    const reader = new FileReader()
-    reader.onloadend = () => {
-      setAvatarPreview(reader.result as string)
+    // Compress image before storing
+    try {
+      setErrors({ ...errors, avatar: '' })
+      const compressedBase64 = await compressImage(file)
+      
+      if (!compressedBase64) {
+        setErrors({ ...errors, avatar: 'Image upload failed. Please try another image.' })
+        setAvatarPreview(null)
+        e.target.value = ''
+        return
+      }
+
+      // Store compressed base64 string
+      setAvatarPreview(compressedBase64)
+    } catch (err) {
+      setErrors({ ...errors, avatar: 'Image upload failed. Please try another image.' })
+      setAvatarPreview(null)
+      e.target.value = ''
     }
-    reader.readAsDataURL(file)
-    setErrors({ ...errors, avatar: '' })
   }
 
   const validate = (): boolean => {
@@ -170,39 +188,65 @@ export default function EditProfileModal({
       return
     }
 
-    setIsSaving(true)
-    setShowSuccess(false)
+    // Validate compressed image if present
+    if (avatarPreview && (!avatarPreview.startsWith('data:image') || avatarPreview.length === 0)) {
+      setGlobalError('Invalid image. Please upload a valid picture.')
+      return
+    }
+
+    setSaving(true)
+    setError(null)
+    setGlobalError(null)
+    setFieldErrors({})
+
+    const skillsArray = skills
+      .split(',')
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0)
+
+    const payload = {
+      name: name.trim(),
+      bio: bio.trim(),
+      phone: phone.trim(),
+      location: location.trim(),
+      skills: skillsArray,
+      hourlyRate: hourlyRate ? Number(hourlyRate) : null,
+      avatarUrl: avatarPreview || null,
+    }
 
     try {
-      const skillsArray = skills
-        .split(',')
-        .map((s) => s.trim())
-        .filter((s) => s.length > 0)
+      const res = await onSave(payload)
 
-      await onSave({
-        name: name.trim(),
-        bio: bio.trim(),
-        phone: phone.trim(),
-        location: location.trim(),
-        skills: skillsArray,
-        hourlyRate: hourlyRate ? Number(hourlyRate) : null,
-        // Pass the avatar preview (data URL or existing URL) for persistence
-        avatarUrl: avatarPreview,
-      })
+      if (!res?.ok) {
+        if (res?.fieldErrors) {
+          setFieldErrors(res.fieldErrors)
+        } else {
+          // Check for image upload error message
+          const errorMsg = res?.globalError || res?.message || 'Failed to save profile'
+          setGlobalError(errorMsg)
+        }
+        setSaving(false)
+        return
+      }
 
+      // Success
+      setSaving(false)
+      setFieldErrors({})
       setShowSuccess(true)
-      // Close modal after a brief delay to show success message
       setTimeout(() => {
         onClose()
         setShowSuccess(false)
       }, 1000)
-    } catch (error) {
-      console.error('Error saving profile:', error)
-      setErrors({
-        submit: 'Failed to save profile. Please try again.',
-      })
-    } finally {
-      setIsSaving(false)
+    } catch (err) {
+      console.error('Error saving profile:', err)
+      const errorMsg = err instanceof Error ? err.message : 'An unexpected error occurred'
+      // Check if it's an image-related error
+      if (errorMsg.toLowerCase().includes('image') || errorMsg.toLowerCase().includes('upload')) {
+        setGlobalError('Image upload failed. Please try again.')
+      } else {
+        setGlobalError(errorMsg)
+      }
+      setSaving(false)
     }
   }
 
@@ -249,7 +293,7 @@ export default function EditProfileModal({
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+        <form onSubmit={handleSubmit} className="p-6 space-y-6" aria-label="Edit Profile Form">
           {/* Avatar Upload */}
           <div>
             <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
@@ -321,11 +365,21 @@ export default function EditProfileModal({
               id="name"
               type="text"
               value={name}
-              onChange={(e) => setName(e.target.value)}
+              onChange={(e) => {
+                setName(e.target.value)
+                // Clear server-side field error when user types
+                if (fieldErrors.name) {
+                  setFieldErrors((prev) => {
+                    const newErrors = { ...prev }
+                    delete newErrors.name
+                    return newErrors
+                  })
+                }
+              }}
               required
               className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-50 focus:outline-none focus:ring-2 focus:ring-[#4F46E5] focus:border-transparent"
-              aria-invalid={errors.name ? 'true' : 'false'}
-              aria-describedby={errors.name ? 'name-error' : undefined}
+              aria-invalid={errors.name || fieldErrors.name ? 'true' : 'false'}
+              aria-describedby={errors.name || fieldErrors.name ? 'name-error' : undefined}
             />
             {errors.name && (
               <p
@@ -334,6 +388,11 @@ export default function EditProfileModal({
               >
                 {errors.name}
               </p>
+            )}
+            {fieldErrors.name && (
+              <div role="alert" className="text-red-600 dark:text-red-400 text-sm mt-1">
+                {fieldErrors.name[0]}
+              </div>
             )}
           </div>
 
@@ -348,10 +407,27 @@ export default function EditProfileModal({
             <textarea
               id="bio"
               value={bio}
-              onChange={(e) => setBio(e.target.value)}
+              onChange={(e) => {
+                setBio(e.target.value)
+                // Clear server-side field error when user types
+                if (fieldErrors.bio) {
+                  setFieldErrors((prev) => {
+                    const newErrors = { ...prev }
+                    delete newErrors.bio
+                    return newErrors
+                  })
+                }
+              }}
               rows={4}
               className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-50 focus:outline-none focus:ring-2 focus:ring-[#4F46E5] focus:border-transparent resize-none"
+              aria-invalid={fieldErrors.bio ? 'true' : 'false'}
+              aria-describedby={fieldErrors.bio ? 'bio-error' : undefined}
             />
+            {fieldErrors.bio && (
+              <div role="alert" id="bio-error" className="text-red-600 dark:text-red-400 text-sm mt-1">
+                {fieldErrors.bio[0]}
+              </div>
+            )}
           </div>
 
           {/* Phone */}
@@ -366,10 +442,20 @@ export default function EditProfileModal({
               id="phone"
               type="tel"
               value={phone}
-              onChange={(e) => setPhone(e.target.value)}
+              onChange={(e) => {
+                setPhone(e.target.value)
+                // Clear server-side field error when user types
+                if (fieldErrors.phone) {
+                  setFieldErrors((prev) => {
+                    const newErrors = { ...prev }
+                    delete newErrors.phone
+                    return newErrors
+                  })
+                }
+              }}
               className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-50 focus:outline-none focus:ring-2 focus:ring-[#4F46E5] focus:border-transparent"
-              aria-invalid={errors.phone ? 'true' : 'false'}
-              aria-describedby={errors.phone ? 'phone-error' : undefined}
+              aria-invalid={errors.phone || fieldErrors.phone ? 'true' : 'false'}
+              aria-describedby={errors.phone || fieldErrors.phone ? 'phone-error' : undefined}
             />
             {errors.phone && (
               <p
@@ -378,6 +464,11 @@ export default function EditProfileModal({
               >
                 {errors.phone}
               </p>
+            )}
+            {fieldErrors.phone && (
+              <div role="alert" className="text-red-600 dark:text-red-400 text-sm mt-1">
+                {fieldErrors.phone[0]}
+              </div>
             )}
           </div>
 
@@ -393,9 +484,26 @@ export default function EditProfileModal({
               id="location"
               type="text"
               value={location}
-              onChange={(e) => setLocation(e.target.value)}
+              onChange={(e) => {
+                setLocation(e.target.value)
+                // Clear server-side field error when user types
+                if (fieldErrors.baseLocation) {
+                  setFieldErrors((prev) => {
+                    const newErrors = { ...prev }
+                    delete newErrors.baseLocation
+                    return newErrors
+                  })
+                }
+              }}
               className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-50 focus:outline-none focus:ring-2 focus:ring-[#4F46E5] focus:border-transparent"
+              aria-invalid={fieldErrors.baseLocation ? 'true' : 'false'}
+              aria-describedby={fieldErrors.baseLocation ? 'location-error' : undefined}
             />
+            {fieldErrors.baseLocation && (
+              <div role="alert" id="location-error" className="text-red-600 dark:text-red-400 text-sm mt-1">
+                {fieldErrors.baseLocation[0]}
+              </div>
+            )}
           </div>
 
           {/* Skills */}
@@ -410,10 +518,27 @@ export default function EditProfileModal({
               id="skills"
               type="text"
               value={skills}
-              onChange={(e) => setSkills(e.target.value)}
+              onChange={(e) => {
+                setSkills(e.target.value)
+                // Clear server-side field error when user types
+                if (fieldErrors.skills) {
+                  setFieldErrors((prev) => {
+                    const newErrors = { ...prev }
+                    delete newErrors.skills
+                    return newErrors
+                  })
+                }
+              }}
               placeholder="e.g., Plumbing, Electrical, Painting"
               className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-50 focus:outline-none focus:ring-2 focus:ring-[#4F46E5] focus:border-transparent"
+              aria-invalid={fieldErrors.skills ? 'true' : 'false'}
+              aria-describedby={fieldErrors.skills ? 'skills-error' : undefined}
             />
+            {fieldErrors.skills && (
+              <div role="alert" id="skills-error" className="text-red-600 dark:text-red-400 text-sm mt-1">
+                {fieldErrors.skills[0]}
+              </div>
+            )}
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
               Separate multiple skills with commas
             </p>
@@ -433,10 +558,20 @@ export default function EditProfileModal({
               min="0"
               step="1"
               value={hourlyRate}
-              onChange={(e) => setHourlyRate(e.target.value)}
+              onChange={(e) => {
+                setHourlyRate(e.target.value)
+                // Clear server-side field error when user types
+                if (fieldErrors.hourlyRate) {
+                  setFieldErrors((prev) => {
+                    const newErrors = { ...prev }
+                    delete newErrors.hourlyRate
+                    return newErrors
+                  })
+                }
+              }}
               className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-50 focus:outline-none focus:ring-2 focus:ring-[#4F46E5] focus:border-transparent"
-              aria-invalid={errors.hourlyRate ? 'true' : 'false'}
-              aria-describedby={errors.hourlyRate ? 'hourlyRate-error' : undefined}
+              aria-invalid={errors.hourlyRate || fieldErrors.hourlyRate ? 'true' : 'false'}
+              aria-describedby={errors.hourlyRate || fieldErrors.hourlyRate ? 'hourlyRate-error' : undefined}
             />
             {errors.hourlyRate && (
               <p
@@ -446,9 +581,28 @@ export default function EditProfileModal({
                 {errors.hourlyRate}
               </p>
             )}
+            {fieldErrors.hourlyRate && (
+              <div role="alert" className="text-red-600 dark:text-red-400 text-sm mt-1">
+                {fieldErrors.hourlyRate[0]}
+              </div>
+            )}
           </div>
 
           {/* Submit Error */}
+          {error && (
+            <div className="p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
+              <p className="text-sm text-red-600 dark:text-red-400">
+                {error}
+              </p>
+            </div>
+          )}
+          {globalError && (
+            <div className="p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
+              <p className="text-sm text-red-600 dark:text-red-400">
+                {globalError}
+              </p>
+            </div>
+          )}
           {errors.submit && (
             <div className="p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
               <p className="text-sm text-red-600 dark:text-red-400">
@@ -472,12 +626,16 @@ export default function EditProfileModal({
               type="button"
               variant="outline"
               onClick={onClose}
-              disabled={isSaving}
+              disabled={saving}
             >
               Cancel
             </Button>
-            <Button type="submit" variant="primary" disabled={isSaving}>
-              {isSaving ? 'Saving...' : 'Save Changes'}
+            <Button
+              type="submit"
+              variant="primary"
+              disabled={saving}
+            >
+              {saving ? 'Saving…' : 'Save Changes'}
             </Button>
           </div>
         </form>

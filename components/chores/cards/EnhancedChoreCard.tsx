@@ -3,7 +3,7 @@
 import { useState, useRef } from 'react';
 import { motion, useMotionValue, useSpring, useTransform } from 'framer-motion';
 import { MapPin, Clock, Users, ArrowRight } from 'lucide-react';
-import { Chore, CATEGORIES } from '../../types';
+import { Chore, CATEGORIES } from '../types';
 import { cn } from '@/lib/utils';
 
 interface EnhancedChoreCardProps {

@@ -4,6 +4,9 @@ import { requireRole, getCurrentUser, getHttpStatusForAuthError, isAuthError, Au
 import { createChore, listPublishedChoresWithFilters, getUniqueCategories } from '@/server/api/chores'
 import { choreCreationLimiter, getRateLimitKey, createRateLimitResponse } from '@/lib/rate-limit'
 
+// Note: In Next.js App Router, body size limits are handled by the runtime
+// For large payloads (base64 images), ensure the deployment platform allows sufficient body size
+
 // GET /api/chores -> list published chores with optional filters
 export async function GET(request: NextRequest) {
   try {
@@ -65,7 +68,16 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const body = await request.json()
+    let body
+    try {
+      body = await request.json()
+    } catch (error) {
+      return NextResponse.json(
+        { ok: false, message: 'Invalid request body' },
+        { status: 400 }
+      )
+    }
+
     const {
       title,
       description,
@@ -85,52 +97,62 @@ export async function POST(request: NextRequest) {
       : null
 
     // Create chore - Zod validation happens inside createChore()
-    const chore = await createChore({
-      title,
-      description,
-      type,
-      category,
-      budget: budget !== undefined && budget !== null ? Number(budget) : undefined,
-      locationAddress: locationAddress || undefined,
-      locationLat: locationLat !== undefined && locationLat !== null ? Number(locationLat) : undefined,
-      locationLng: locationLng !== undefined && locationLng !== null ? Number(locationLng) : undefined,
-      dueAt: dueAt || undefined,
-      imageUrl: imageUrl,
-      createdById: user.id, // Always from session
-    })
-
-    return NextResponse.json({ chore }, { status: 201 })
-  } catch (error: any) {
-    console.error('Error creating chore:', error)
-    
-    // Handle validation errors (INVALID_INPUT from Zod)
-    if (error instanceof AuthorizationError && error.code === AUTH_ERRORS.INVALID_INPUT) {
-      try {
-        const validationErrors = JSON.parse(error.message)
+    let result
+    try {
+      result = await createChore({
+        title,
+        description,
+        type,
+        category,
+        budget: budget !== undefined && budget !== null ? Number(budget) : undefined,
+        locationAddress: locationAddress || undefined,
+        locationLat: locationLat !== undefined && locationLat !== null ? Number(locationLat) : undefined,
+        locationLng: locationLng !== undefined && locationLng !== null ? Number(locationLng) : undefined,
+        dueAt: dueAt || undefined,
+        imageUrl: imageUrl,
+        createdById: user.id, // Always from session
+      })
+    } catch (dbError: any) {
+      // Handle database errors (e.g., image too large for column)
+      if (dbError.code === 'P2000' || dbError.message?.includes('too large')) {
         return NextResponse.json(
-          { error: 'Validation failed', details: validationErrors },
-          { status: 400 }
-        )
-      } catch {
-        return NextResponse.json(
-          { error: error.message || 'Invalid input' },
+          { ok: false, message: 'Image upload failed. Please try again.' },
           { status: 400 }
         )
       }
+      throw dbError
     }
+
+    // If validation failed, createChore returns a NextResponse with structured errors
+    if (result instanceof NextResponse) {
+      return result
+    }
+
+    // Success - result is the created chore
+    return NextResponse.json({ ok: true, chore: result }, { status: 201 })
+  } catch (error: any) {
+    console.error('Error creating chore:', error)
     
-    // Return proper HTTP status for other auth errors
+    // Return proper HTTP status for auth errors
     if (isAuthError(error)) {
       const status = getHttpStatusForAuthError(error)
       return NextResponse.json(
-        { error: error.message || 'Access denied' },
+        { ok: false, error: error.message || 'Access denied' },
         { status }
       )
     }
     
+    // Handle image processing errors
+    if (error.message?.includes('image') || error.message?.includes('upload')) {
+      return NextResponse.json(
+        { ok: false, message: 'Image upload failed. Please try again.' },
+        { status: 400 }
+      )
+    }
+    
     return NextResponse.json(
-      { error: error.message || 'Failed to create chore' },
-      { status: 400 }
+      { ok: false, error: error.message || 'Failed to create chore' },
+      { status: 500 }
     )
   }
 }

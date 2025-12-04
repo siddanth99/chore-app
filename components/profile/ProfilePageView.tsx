@@ -137,6 +137,16 @@ export default function ProfilePageView({
     .toUpperCase()
     .slice(0, 2)
 
+  /**
+   * Save profile data
+   * Returns structured result: { ok: true, profile } on success, 
+   * { ok: false, fieldErrors?, globalError? } on failure
+   * 
+   * Manual test:
+   * 1. Submit with invalid name (< 2 chars) -> should return fieldErrors.name
+   * 2. Submit with invalid phone format -> should return fieldErrors.phone
+   * 3. Submit with valid data -> should return { ok: true, profile }
+   */
   const handleSave = async (data: {
     name: string
     bio: string
@@ -145,7 +155,7 @@ export default function ProfilePageView({
     skills: string[]
     hourlyRate: number | null
     avatarUrl?: string | null
-  }) => {
+  }): Promise<{ ok: true; profile: any } | { ok: false; fieldErrors?: Record<string, string[]>; globalError?: string }> => {
     try {
       const response = await fetch('/api/profile', {
         method: 'POST',
@@ -162,12 +172,28 @@ export default function ProfilePageView({
       })
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.error || 'Failed to save profile')
+        let json = {}
+        try {
+          json = await response.json()
+        } catch (e) {
+          return { ok: false, globalError: 'Failed to save profile' }
+        }
+
+        // Check for structured validation errors
+        if (json?.details?.fieldErrors) {
+          return { ok: false, fieldErrors: json.details.fieldErrors }
+        }
+
+        if (json?.errors?.fieldErrors) {
+          return { ok: false, fieldErrors: json.errors.fieldErrors }
+        }
+
+        return { ok: false, globalError: json?.error || json?.message || 'Failed to save profile' }
       }
 
       const result = await response.json()
-
+      
+      // Update local state on success
       setCurrentProfile({
         ...currentProfile,
         name: result.profile.name,
@@ -180,9 +206,11 @@ export default function ProfilePageView({
       })
 
       router.refresh()
+      
+      return { ok: true, profile: result.profile || result }
     } catch (error) {
       console.error('Error saving profile:', error)
-      throw error
+      return { ok: false, globalError: error instanceof Error ? error.message : 'Network or server error' }
     }
   }
 

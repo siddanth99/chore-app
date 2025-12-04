@@ -54,7 +54,7 @@ export const updateProfileSchema = z.object({
   
   avatarUrl: z
     .string()
-    .max(5000, 'Avatar URL is too long') // Data URLs can be long
+    .max(500000, 'Avatar URL is too long') // Base64 data URLs can be long (compressed ~300KB = ~400KB base64)
     .nullable()
     .optional(),
 })

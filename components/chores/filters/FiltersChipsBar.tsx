@@ -2,7 +2,7 @@
 
 import { motion, AnimatePresence } from 'framer-motion';
 import { X } from 'lucide-react';
-import { Filters, CATEGORIES, STATUS_OPTIONS } from '../../types';
+import { Filters, CATEGORIES, STATUS_OPTIONS } from '../types';
 import { cn } from '@/lib/utils';
 
 interface FiltersChipsBarProps {

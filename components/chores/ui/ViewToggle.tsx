@@ -2,7 +2,7 @@
 
 import { motion } from 'framer-motion';
 import { LayoutGrid, List, Map } from 'lucide-react';
-import { ViewMode } from '../../types';
+import { ViewMode } from '../types';
 import { cn } from '@/lib/utils';
 
 interface ViewToggleProps {

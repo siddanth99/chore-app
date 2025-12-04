@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronDown, Check } from 'lucide-react';
-import { SortOption } from '../../types';
+import { SortOption } from '../types';
 import { cn } from '@/lib/utils';
 
 interface SortDropdownProps {

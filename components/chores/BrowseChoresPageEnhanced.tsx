@@ -19,6 +19,9 @@ interface BrowseChoresPageEnhancedProps {
   chores?: Chore[] | null;
   initialFilters?: Filters;
   theme?: 'light' | 'dark';
+  onFiltersChange?: (filters: Filters) => void;
+  userPosition?: { lat: number; lng: number } | null;
+  userLocationError?: string | null;
   onViewChore?: (id: string) => void;
   onPostChore?: () => void;
 }
@@ -49,6 +52,9 @@ export function BrowseChoresPageEnhanced({
   chores,
   initialFilters = {},
   theme: initialTheme = 'light',
+  onFiltersChange,
+  userPosition,
+  userLocationError,
   onViewChore: externalOnViewChore,
   onPostChore: externalOnPostChore,
 }: BrowseChoresPageEnhancedProps) {

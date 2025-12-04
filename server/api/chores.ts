@@ -4,6 +4,7 @@ import { ChoreStatus, ChoreType, NotificationType } from '@prisma/client'
 import { createNotification } from './notifications'
 import { createChoreSchema } from '@/lib/validation/chore.schema'
 import { AuthorizationError, AUTH_ERRORS } from '../auth/role'
+import { NextResponse } from 'next/server'
 
 /** ---------- Types ---------- */
 
@@ -24,17 +25,21 @@ export interface CreateChoreInput {
 /** ---------- Validation Helper ---------- */
 
 /**
- * Validate input against a Zod schema and throw AuthorizationError if invalid
+ * Validate input using the existing Zod schema.
+ * If invalid, return a NextResponse with structured errors:
+ * { ok: false, errors: { formErrors: [], fieldErrors: { description: [...], ... } } }
+ * If valid, return { ok: true, data: parsed.data }
  */
-function validateInput<T>(schema: { safeParse: (input: unknown) => { success: boolean; data?: T; error?: any } }, input: unknown): T {
+export function validateInputOrResponse<T>(
+  schema: { safeParse: (input: unknown) => { success: boolean; data?: T; error?: any } },
+  input: unknown
+): NextResponse | { ok: true; data: T } {
   const parsed = schema.safeParse(input)
   if (!parsed.success) {
-    throw new AuthorizationError(
-      AUTH_ERRORS.INVALID_INPUT,
-      JSON.stringify(parsed.error.flatten())
-    )
+    const errors = parsed.error.flatten() // { formErrors: [], fieldErrors: {...} }
+    return NextResponse.json({ ok: false, errors }, { status: 400 })
   }
-  return parsed.data as T
+  return { ok: true, data: parsed.data as T }
 }
 
 /** ---------- Helpers ---------- */
@@ -71,10 +76,12 @@ function normalizeDueAt(dueAt: string | Date | null | undefined): Date | null {
 /** ---------- Core helpers ---------- */
 
 // Create a new chore
-export async function createChore(input: CreateChoreInput) {
+// Note: This function now returns either a NextResponse (on validation error) or the created chore
+// The caller (API route) should check if the result is a NextResponse and return it early
+export async function createChore(input: CreateChoreInput): Promise<NextResponse | Awaited<ReturnType<typeof prisma.chore.create>>> {
   // Validate input with Zod schema
   // Note: createdById is set by the caller (API route) from session, not validated here
-  const validatedInput = validateInput(createChoreSchema, {
+  const validation = validateInputOrResponse(createChoreSchema, {
     title: input.title,
     description: input.description,
     type: input.type,
@@ -86,6 +93,13 @@ export async function createChore(input: CreateChoreInput) {
     locationLng: input.locationLng,
     dueAt: input.dueAt,
   })
+
+  // If validation failed, return the NextResponse with structured errors
+  if (!validation.ok) {
+    return validation
+  }
+
+  const validatedInput = validation.data
 
   return prisma.chore.create({
     data: {
