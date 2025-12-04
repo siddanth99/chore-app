@@ -3,8 +3,8 @@
 import { useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, X, MapPin, SlidersHorizontal } from 'lucide-react';
-import { Filters, CATEGORIES, STATUS_OPTIONS } from '../../types';
-import { Slider } from '@/components/ui/slider';
+import { Filters, CATEGORIES, STATUS_OPTIONS } from '../types';
+import RangeSlider from '@/components/ui/RangeSlider';
 import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -172,10 +172,12 @@ export function ChoreFiltersSidebar({
 
       {/* Budget Slider */}
       <div className="space-y-3">
-        <label className="text-sm font-medium text-muted-foreground">Budget Range</label>
+        <label className="text-sm font-medium text-muted-foreground" htmlFor="budget-range-slider">
+          Budget Range
+        </label>
         <div className="relative">
           {/* Visual histogram background */}
-          <div className="absolute inset-x-0 bottom-0 h-8 flex items-end justify-between gap-0.5 opacity-20">
+          <div className="absolute inset-x-0 bottom-0 h-8 flex items-end justify-between gap-0.5 opacity-20" aria-hidden="true">
             {[3, 5, 8, 12, 10, 7, 4, 6, 9, 11, 8, 5].map((height, i) => (
               <div
                 key={i}
@@ -184,30 +186,20 @@ export function ChoreFiltersSidebar({
               />
             ))}
           </div>
-          {/* TODO: The main repo's Slider component only supports single values, not ranges.
-              Need to either:
-              1. Update Slider component to support range (min/max) values
-              2. Use a range slider library (e.g., @radix-ui/react-slider with range support)
-              3. Create a custom RangeSlider component
-              
-              For now, this will cause a TypeScript error. The Slider expects value: number[]
-              but onValueChange receives [min, max] tuple. */}
-          <Slider
-            defaultValue={[localFilters.minBudget || 0, localFilters.maxBudget || 500] as any}
-            max={500}
-            step={10}
-            onValueChange={(values: number[]) => {
-              // TODO: Fix when range slider is implemented
-              const [min, max] = values.length === 2 ? [values[0], values[1]] : [values[0], 500];
-              updateFilter('minBudget', min);
-              updateFilter('maxBudget', max);
+          <RangeSlider
+            value={[localFilters.minBudget ?? 0, localFilters.maxBudget ?? 5000]}
+            min={0}
+            max={100000}
+            step={100}
+            onChange={(v) => {
+              updateFilter('minBudget', v[0]);
+              updateFilter('maxBudget', v[1]);
             }}
-            className="relative z-10"
           />
         </div>
-        <div className="flex items-center justify-between text-sm text-muted-foreground">
-          <span>${localFilters.minBudget || 0}</span>
-          <span>${localFilters.maxBudget || 500}+</span>
+        <div className="flex items-center justify-between text-sm text-muted-foreground" role="status" aria-live="polite">
+          <span aria-label="Minimum budget">${localFilters.minBudget || 0}</span>
+          <span aria-label="Maximum budget">${localFilters.maxBudget || 5000}</span>
         </div>
       </div>
 
