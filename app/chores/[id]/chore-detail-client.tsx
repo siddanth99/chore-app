@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { ChoreStatus, ChoreType } from '@prisma/client'
 import ChoreChat from '@/features/chat/chore-chat'
@@ -10,6 +10,8 @@ import Button from '@/components/ui/button'
 import Badge from '@/components/ui/Badge'
 import Card from '@/components/ui/Card'
 import { formatDate } from '@/lib/utils'
+import CustomerApplicationsPanel from '@/components/applications/CustomerApplicationsPanel'
+import { useToast } from '@/components/ui/toast'
 
 interface PaymentSummary {
   totalFromCustomer: number
@@ -59,7 +61,26 @@ export default function ChoreDetailClient({
   paymentSummary: initialPaymentSummary = null,
 }: ChoreDetailClientProps) {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const toast = useToast()
   const [applications, setApplications] = useState(initialApplications || [])
+  
+  // Determine back navigation based on where user came from
+  const from = searchParams.get('from')
+  const backHref = from === 'notifications' 
+    ? '/notifications' 
+    : from === 'dashboard' 
+    ? '/dashboard'
+    : from === 'applications'
+    ? '/applications'
+    : '/chores'
+  const backLabel = from === 'notifications'
+    ? '← Back to Notifications'
+    : from === 'dashboard'
+    ? '← Back to Dashboard'
+    : from === 'applications'
+    ? '← Back to My Applications'
+    : '← Back to Chores'
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
@@ -162,6 +183,13 @@ export default function ChoreDetailClient({
     e.preventDefault()
     setError('')
     setSuccess('')
+    
+    // Client-side validation
+    if (!message || message.trim().length < 10) {
+      setError('Please provide a message with at least 10 characters explaining why you\'re a good fit.')
+      return
+    }
+    
     setSubmitting(true)
 
     try {
@@ -172,14 +200,36 @@ export default function ChoreDetailClient({
         },
         body: JSON.stringify({
           bidAmount: bidAmount ? parseFloat(bidAmount) : undefined,
-          message: message || undefined,
+          message: message.trim(),
         }),
       })
 
       const data = await response.json()
 
       if (!response.ok) {
-        setError(data.error || 'Failed to submit application')
+        // Handle specific error cases
+        if (response.status === 429) {
+          toast.error('Rate limited', 'You are applying too frequently. Please try again later.')
+          setError('You are applying too frequently. Please try again later.')
+        } else if (response.status === 400 && data.details) {
+          // Validation error with details
+          const fieldErrors = data.details?.fieldErrors || {}
+          const errorMessages = Object.values(fieldErrors).flat().join('. ')
+          toast.error('Validation error', errorMessages || 'Please check your input.')
+          setError(errorMessages || data.error || 'Please check your input and try again.')
+        } else if (response.status === 409) {
+          toast.warning('Already applied', 'You have already applied to this chore.')
+          setError('You have already applied to this chore.')
+        } else if (response.status === 403) {
+          toast.error('Not allowed', data.error || 'You cannot apply to this chore.')
+          setError(data.error || 'You are not allowed to apply to this chore.')
+        } else if (response.status === 404) {
+          toast.error('Not available', 'This chore is no longer available.')
+          setError('This chore is no longer available.')
+        } else {
+          toast.error('Failed to apply', data.error || 'Please try again.')
+          setError(data.error || 'Failed to submit application. Please try again.')
+        }
         return
       }
 
@@ -188,12 +238,14 @@ export default function ChoreDetailClient({
         setApplications((prev) => (prev ? [...prev, data.application] : [data.application]))
       }
       
-      setSuccess('Application submitted successfully!')
+      toast.success('Application sent! 🎉', 'The customer will review your application.')
+      setSuccess('🎉 Application submitted successfully! The customer will review your application.')
       setBidAmount('')
       setMessage('')
       router.refresh()
     } catch (err) {
-      setError('An error occurred. Please try again.')
+      toast.error('Connection error', 'Please check your connection and try again.')
+      setError('An error occurred. Please check your connection and try again.')
     } finally {
       setSubmitting(false)
     }
@@ -522,12 +574,12 @@ export default function ChoreDetailClient({
           Status: {choreStatus} | You are: {currentUser?.role ?? 'Guest'}
         </div>
 
-        {/* Back link */}
+        {/* Back link - source aware */}
         <Link
-          href="/chores"
-          className="mb-4 inline-block text-sm text-blue-600 hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300 transition-colors"
+          href={backHref}
+          className="mb-4 inline-flex items-center gap-1 text-sm text-primary hover:text-primary/80 transition-colors"
         >
-          ← Back to Chores
+          {backLabel}
         </Link>
 
         {/* Cancelled Banner */}
@@ -695,13 +747,29 @@ export default function ChoreDetailClient({
 
         {/* Error/Success messages */}
         {error && (
-          <div className="mb-6 rounded-md bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 p-4">
-            <p className="text-sm text-red-800 dark:text-red-300">{error}</p>
+          <div className="mb-6 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 p-4 flex items-start gap-3">
+            <div className="flex-shrink-0 p-1 rounded-full bg-red-100 dark:bg-red-800/50">
+              <svg className="w-5 h-5 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+              </svg>
+            </div>
+            <div>
+              <p className="font-medium text-red-800 dark:text-red-200">Something went wrong</p>
+              <p className="text-sm text-red-700 dark:text-red-300 mt-0.5">{error}</p>
+            </div>
           </div>
         )}
         {success && (
-          <div className="mb-6 rounded-md bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 p-4">
-            <p className="text-sm text-green-800 dark:text-green-300">{success}</p>
+          <div className="mb-6 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 p-4 flex items-start gap-3">
+            <div className="flex-shrink-0 p-1 rounded-full bg-emerald-100 dark:bg-emerald-800/50">
+              <svg className="w-5 h-5 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <div>
+              <p className="font-medium text-emerald-800 dark:text-emerald-200">Success!</p>
+              <p className="text-sm text-emerald-700 dark:text-emerald-300 mt-0.5">{success}</p>
+            </div>
           </div>
         )}
 
@@ -723,31 +791,71 @@ export default function ChoreDetailClient({
           </Card>
         )}
 
-        {/* Worker: Already applied */}
-        {isWorker && hasApplied && !isAssignedWorker && (
-          <Card className="mb-6 border-2 border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20">
-            <Button
-              variant="secondary"
-              size="md"
-              disabled
-              className="w-full sm:w-auto"
-            >
-              Applied (View Application)
-            </Button>
+        {/* Worker: Already applied - Show application summary */}
+        {isWorker && hasApplied && !isAssignedWorker && workerApplication && (
+          <Card className="mb-6 border-2 border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20">
+            <div className="flex items-start gap-4">
+              <div className="flex-shrink-0 p-3 rounded-xl bg-emerald-100 dark:bg-emerald-800/50">
+                <svg className="w-6 h-6 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <div className="flex-1">
+                <h3 className="text-lg font-semibold text-emerald-800 dark:text-emerald-200 mb-1">
+                  Application Submitted
+                </h3>
+                <p className="text-sm text-emerald-700 dark:text-emerald-300 mb-3">
+                  You&apos;ve already applied to this chore. Here&apos;s your application summary:
+                </p>
+                <div className="space-y-2 text-sm">
+                  {workerApplication.bidAmount && (
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium text-emerald-800 dark:text-emerald-200">Your Bid:</span>
+                      <span className="text-emerald-700 dark:text-emerald-300">${workerApplication.bidAmount}</span>
+                    </div>
+                  )}
+                  {workerApplication.message && (
+                    <div>
+                      <span className="font-medium text-emerald-800 dark:text-emerald-200">Your Message:</span>
+                      <p className="mt-1 text-emerald-700 dark:text-emerald-300 italic">&quot;{workerApplication.message}&quot;</p>
+                    </div>
+                  )}
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-emerald-800 dark:text-emerald-200">Status:</span>
+                    <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
+                      workerApplication.status === 'ACCEPTED' 
+                        ? 'bg-green-100 text-green-800 dark:bg-green-800/50 dark:text-green-200'
+                        : workerApplication.status === 'REJECTED'
+                        ? 'bg-red-100 text-red-800 dark:bg-red-800/50 dark:text-red-200'
+                        : 'bg-amber-100 text-amber-800 dark:bg-amber-800/50 dark:text-amber-200'
+                    }`}>
+                      {workerApplication.status}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
           </Card>
         )}
 
-        {/* Worker: Prominent Apply Now button */}
+        {/* Worker: Prominent Apply Now CTA */}
         {canApply && (
-          <Card className="mb-6 border-2 border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20">
+          <Card className="mb-6 border-2 border-primary/30 bg-gradient-to-br from-primary/5 to-primary/10 dark:from-primary/10 dark:to-primary/5">
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-              <div>
-                <h3 className="mb-2 text-lg font-semibold text-slate-900 dark:text-slate-50">
-                  Interested in this chore?
-                </h3>
-                <p className="text-sm text-slate-700 dark:text-slate-300">
-                  Apply now to get started and submit your bid.
-                </p>
+              <div className="flex items-start gap-4">
+                <div className="flex-shrink-0 p-3 rounded-xl bg-primary/20">
+                  <svg className="w-6 h-6 text-primary" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 14.15v4.25c0 1.094-.787 2.036-1.872 2.18-2.087.277-4.216.42-6.378.42s-4.291-.143-6.378-.42c-1.085-.144-1.872-1.086-1.872-2.18v-4.25m16.5 0a2.18 2.18 0 00.75-1.661V8.706c0-1.081-.768-2.015-1.837-2.175a48.114 48.114 0 00-3.413-.387m4.5 8.006c-.194.165-.42.295-.673.38A23.978 23.978 0 0112 15.75c-2.648 0-5.195-.429-7.577-1.22a2.016 2.016 0 01-.673-.38m0 0A2.18 2.18 0 013 12.489V8.706c0-1.081.768-2.015 1.837-2.175a48.111 48.111 0 013.413-.387m7.5 0V5.25A2.25 2.25 0 0013.5 3h-3a2.25 2.25 0 00-2.25 2.25v.894m7.5 0a48.667 48.667 0 00-7.5 0M12 12.75h.008v.008H12v-.008z" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="mb-1 text-lg font-semibold text-foreground">
+                    Ready to take on this chore?
+                  </h3>
+                  <p className="text-sm text-muted-foreground">
+                    Submit your application and let the customer know why you&apos;re the best fit.
+                  </p>
+                </div>
               </div>
               <Button
                 onClick={() => {
@@ -756,8 +864,11 @@ export default function ChoreDetailClient({
                 }}
                 variant="primary"
                 size="lg"
-                className="shadow-lg"
+                className="shadow-lg whitespace-nowrap"
               >
+                <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" />
+                </svg>
                 Apply Now
               </Button>
             </div>
@@ -767,155 +878,116 @@ export default function ChoreDetailClient({
         {/* Worker: Apply/Bid form */}
         {canApply && (
           <div id="apply-form">
-            <Card className="mb-6">
-              <h2 className="mb-4 text-xl font-semibold text-slate-800 dark:text-slate-100">
-                Apply for this Chore
-              </h2>
-              <form onSubmit={handleApply} className="space-y-4">
-                <div>
-                  <label
-                    htmlFor="bidAmount"
-                    className="block text-sm font-medium text-slate-700 dark:text-slate-300"
-                  >
-                    Bid Amount (optional)
-                  </label>
-                  <input
-                    type="number"
-                    id="bidAmount"
-                    min="0"
-                    step="0.01"
-                    className="mt-1 block w-full rounded-md border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-slate-700 dark:text-slate-300 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 sm:text-sm"
-                    value={bidAmount}
-                    onChange={(e) => setBidAmount(e.target.value)}
-                  />
-                </div>
+            <Card className="mb-6 overflow-hidden">
+              {/* Form Header */}
+              <div className="bg-gradient-to-r from-primary/10 to-primary/5 -mx-4 sm:-mx-6 -mt-4 sm:-mt-6 px-4 sm:px-6 py-4 mb-6 border-b border-primary/20">
+                <h2 className="text-xl font-semibold text-foreground flex items-center gap-2">
+                  <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+                  </svg>
+                  Submit Your Application
+                </h2>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Tell the customer why you&apos;re the perfect match for this chore.
+                </p>
+              </div>
+
+              <form onSubmit={handleApply} className="space-y-6">
+                {/* Message/Pitch Field */}
                 <div>
                   <label
                     htmlFor="message"
-                    className="block text-sm font-medium text-slate-700 dark:text-slate-300"
+                    className="block text-sm font-semibold text-foreground mb-2"
                   >
-                    Message (optional)
+                    Why are you a good fit? <span className="text-red-500">*</span>
                   </label>
+                  <p className="text-xs text-muted-foreground mb-2">
+                    Share your relevant experience and why you&apos;d be great for this job.
+                  </p>
                   <textarea
                     id="message"
                     rows={4}
-                    className="mt-1 block w-full rounded-md border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-slate-700 dark:text-slate-300 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 sm:text-sm"
+                    required
+                    minLength={10}
+                    placeholder="I'm a great fit for this chore because..."
+                    className="block w-full rounded-xl border border-border bg-background px-4 py-3 text-foreground placeholder:text-muted-foreground shadow-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
                     value={message}
                     onChange={(e) => setMessage(e.target.value)}
                   />
+                  {message.length > 0 && message.length < 10 && (
+                    <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+                      Please write at least 10 characters ({10 - message.length} more needed)
+                    </p>
+                  )}
                 </div>
-                <Button
-                  type="submit"
-                  disabled={submitting}
-                  variant="primary"
-                >
-                  {submitting ? 'Submitting...' : 'Submit Application'}
-                </Button>
+
+                {/* Bid Amount Field */}
+                <div>
+                  <label
+                    htmlFor="bidAmount"
+                    className="block text-sm font-semibold text-foreground mb-2"
+                  >
+                    Your Expected Amount
+                  </label>
+                  <p className="text-xs text-muted-foreground mb-2">
+                    {chore.budget 
+                      ? `The customer's budget is $${chore.budget}. You can match it or propose a different amount.`
+                      : 'No budget specified. Propose your rate for this job.'}
+                  </p>
+                  <div className="relative">
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground font-medium">$</span>
+                    <input
+                      type="number"
+                      id="bidAmount"
+                      min="0"
+                      step="1"
+                      placeholder={chore.budget ? String(chore.budget) : 'Enter amount'}
+                      className="block w-full rounded-xl border border-border bg-background pl-8 pr-4 py-3 text-foreground placeholder:text-muted-foreground shadow-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+                      value={bidAmount}
+                      onChange={(e) => setBidAmount(e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                {/* Submit Button */}
+                <div className="pt-2">
+                  <Button
+                    type="submit"
+                    disabled={submitting || message.length < 10}
+                    variant="primary"
+                    size="lg"
+                    className="w-full shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {submitting ? (
+                      <>
+                        <svg className="animate-spin -ml-1 mr-2 h-5 w-5" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                        </svg>
+                        Submitting Application...
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" />
+                        </svg>
+                        Submit Application
+                      </>
+                    )}
+                  </Button>
+                </div>
               </form>
             </Card>
           </div>
         )}
 
-        {/* Customer: Applications list */}
-        {isOwner && applications && applications.length > 0 && (
-          <Card className="mb-6">
-            <h2 className="mb-4 text-xl font-semibold text-slate-800 dark:text-slate-100">
-              Applications ({applications.length})
-            </h2>
-              <div className="space-y-4">
-                {applications.map((app) => (
-                  <div
-                    key={app.id}
-                    className="rounded-lg border border-gray-200 dark:border-slate-700 p-4 bg-gray-50 dark:bg-slate-800/50"
-                  >
-                    <div className="mb-2 flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2">
-                          <h3 className="font-medium text-slate-900 dark:text-slate-50">
-                            {app.worker.name}
-                          </h3>
-                          {(app.workerRating || app.workerAverageRating) && (
-                            <div className="flex items-center gap-1">
-                              <div className="flex items-center">
-                                {[1, 2, 3, 4, 5].map((star) => {
-                                  const rating = app.workerRating?.average || app.workerAverageRating || 0
-                                  return (
-                                    <span
-                                      key={star}
-                                      className={`text-xs ${
-                                        star <= Math.round(rating)
-                                          ? 'text-yellow-400'
-                                          : 'text-slate-400 dark:text-slate-600'
-                                      }`}
-                                    >
-                                      ★
-                                    </span>
-                                  )
-                                })}
-                              </div>
-                              <span className="text-xs text-slate-500 dark:text-slate-400">
-                                {((app.workerRating?.average || app.workerAverageRating) || 0).toFixed(1)} / 5
-                                {(app.workerRating?.count || app.workerRatingCount) ? ` (${app.workerRating?.count || app.workerRatingCount} reviews)` : ''}
-                              </span>
-                            </div>
-                          )}
-                        </div>
-                        <p className="text-sm text-slate-500 dark:text-slate-400">
-                          {app.worker.email}
-                        </p>
-                      </div>
-                      <Badge
-                        variant={
-                          app.status === 'ACCEPTED'
-                            ? 'statusCompleted'
-                            : app.status === 'REJECTED'
-                            ? 'statusCancelled'
-                            : 'statusPublished'
-                        }
-                      >
-                        {app.status}
-                      </Badge>
-                    </div>
-                    {app.bidAmount && (
-                      <p className="mb-2 text-sm text-slate-700 dark:text-slate-300">
-                        <span className="font-medium">Bid:</span> ${app.bidAmount}
-                      </p>
-                    )}
-                    {app.message && (
-                      <p className="mb-2 text-sm text-slate-700 dark:text-slate-300">{app.message}</p>
-                    )}
-                    <p className="text-xs text-slate-500 dark:text-slate-400">
-                      Applied on {formatDate(app.createdAt)}
-                    </p>
-                    {app.status === 'PENDING' && choreStatus === 'PUBLISHED' && (
-                      <Button
-                        onClick={() => handleAssign(app.id)}
-                        disabled={loading}
-                        variant="primary"
-                        size="sm"
-                        className="mt-2 bg-green-600 hover:bg-green-500"
-                      >
-                        Assign
-                      </Button>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </Card>
-        )}
-
-        {isOwner && applications && applications.length === 0 && (
-          <Card className="mb-6 text-center">
-            <div className="max-w-md mx-auto py-8">
-              <div className="text-5xl mb-4">📋</div>
-              <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-50 mb-2">
-                No applications yet
-              </h3>
-              <p className="text-slate-500 dark:text-slate-400">
-                Workers will see this in their nearby list if location is set. Check back soon!
-              </p>
-            </div>
-          </Card>
+        {/* Customer: Applications Panel */}
+        {isOwner && applications && (
+          <CustomerApplicationsPanel
+            applications={applications}
+            choreId={chore.id}
+            choreStatus={choreStatus}
+          />
         )}
 
         {/* Customer: Cancellation Request Decision */}

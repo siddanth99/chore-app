@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useSession, signIn, signOut } from 'next-auth/react';
 import { useTheme } from 'next-themes';
 import Button from '@/components/ui/button';
+import NotificationsBell from '@/components/notifications/NotificationsBell';
 
 const Logo = () => (
   <svg width="32" height="32" viewBox="0 0 32 32" fill="none" className="text-primary">
@@ -35,13 +36,6 @@ const MenuIcon = () => (
   </svg>
 );
 
-const BellIcon = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
-    <path d="M13.73 21a2 2 0 0 1-3.46 0" />
-  </svg>
-);
-
 const UserIcon = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
@@ -56,8 +50,8 @@ export function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
   const [mounted, setMounted] = React.useState(false);
 
-  // Stub for unread notifications count - replace with real data
-  const unreadCount = 0;
+  // Get user role from session
+  const userRole = (session?.user as any)?.role;
 
   // Avoid hydration mismatch
   React.useEffect(() => {
@@ -73,11 +67,6 @@ export function Header() {
 
   const handlePostChore = () => {
     router.push('/chores/new');
-  };
-
-  const handleOpenNotifications = () => {
-    // TODO: openNotifications() - navigate to notifications page or open modal
-    router.push('/notifications');
   };
 
   const navItems = [
@@ -122,37 +111,50 @@ export function Header() {
               </button>
             )}
 
-            {/* Notifications Bell */}
-            {session && (
-              <button
-                onClick={handleOpenNotifications}
-                className="relative p-2 rounded-lg hover:bg-secondary transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                aria-label="Open notifications"
-              >
-                <BellIcon />
-                {unreadCount > 0 && (
-                  <span className="absolute top-1 right-1 flex h-4 w-4 items-center justify-center rounded-full bg-destructive text-[10px] font-bold text-destructive-foreground">
-                    {unreadCount > 9 ? '9+' : unreadCount}
-                  </span>
-                )}
-              </button>
-            )}
+            {/* Notifications Bell - Real component with unread count */}
+            {session && <NotificationsBell />}
 
-            {/* CTAs */}
+            {/* CTAs - Role-based */}
             <div className="hidden sm:flex items-center gap-2">
-              <Button
-                variant="ghost"
-                className="text-sm font-medium"
-                onClick={() => router.push('/chores')}
-              >
-                Browse Chores
-              </Button>
-              <Button
-                className="text-sm font-medium bg-primary hover:bg-primary/90"
-                onClick={handlePostChore}
-              >
-                Post a Chore
-              </Button>
+              {/* WORKER: Show "My Applications" only */}
+              {session && userRole === 'WORKER' && (
+                <Button
+                  className="text-sm font-medium bg-primary hover:bg-primary/90"
+                  onClick={() => router.push('/applications')}
+                >
+                  My Applications
+                </Button>
+              )}
+              
+              {/* CUSTOMER: Show "Browse Chores" + "Post a Chore" */}
+              {session && userRole === 'CUSTOMER' && (
+                <>
+                  <Button
+                    variant="ghost"
+                    className="text-sm font-medium"
+                    onClick={() => router.push('/chores')}
+                  >
+                    Browse Chores
+                  </Button>
+                  <Button
+                    className="text-sm font-medium bg-primary hover:bg-primary/90"
+                    onClick={handlePostChore}
+                  >
+                    Post a Chore
+                  </Button>
+                </>
+              )}
+              
+              {/* Not logged in: Show Browse Chores only */}
+              {!session && (
+                <Button
+                  variant="ghost"
+                  className="text-sm font-medium"
+                  onClick={() => router.push('/chores')}
+                >
+                  Browse Chores
+                </Button>
+              )}
             </div>
 
             {/* Auth / Profile Section */}
@@ -173,7 +175,7 @@ export function Header() {
                     {session.user?.name ?? session.user?.email}
                   </span>
                 </Link>
-                <Button variant="outline" onClick={() => signOut()}>
+                <Button variant="outline" onClick={() => signOut({ callbackUrl: '/' })}>
                   Log out
                 </Button>
               </div>
@@ -212,30 +214,44 @@ export function Header() {
                 </Link>
               ))}
               <div className="flex flex-col gap-2 mt-4 px-4">
-                <Button variant="outline" className="w-full" onClick={() => router.push('/chores')}>
-                  Browse Chores
-                </Button>
-                <Button className="w-full" onClick={handlePostChore}>
-                  Post a Chore
-                </Button>
+                {/* WORKER mobile: My Applications */}
+                {session && userRole === 'WORKER' && (
+                  <Button className="w-full" onClick={() => { setMobileMenuOpen(false); router.push('/applications'); }}>
+                    My Applications
+                  </Button>
+                )}
+                
+                {/* CUSTOMER mobile: Browse + Post */}
+                {session && userRole === 'CUSTOMER' && (
+                  <>
+                    <Button variant="outline" className="w-full" onClick={() => { setMobileMenuOpen(false); router.push('/chores'); }}>
+                      Browse Chores
+                    </Button>
+                    <Button className="w-full" onClick={() => { setMobileMenuOpen(false); handlePostChore(); }}>
+                      Post a Chore
+                    </Button>
+                  </>
+                )}
+                
+                {/* Not logged in mobile: Browse only */}
+                {!session && (
+                  <Button variant="outline" className="w-full" onClick={() => { setMobileMenuOpen(false); router.push('/chores'); }}>
+                    Browse Chores
+                  </Button>
+                )}
                 {session ? (
                   <>
-                    <Button
-                      variant="ghost"
-                      className="w-full justify-start"
-                      onClick={() => {
-                        setMobileMenuOpen(false);
-                        router.push('/notifications');
-                      }}
+                    <Link
+                      href="/notifications"
+                      className="flex items-center w-full px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-secondary rounded-lg transition-colors"
+                      onClick={() => setMobileMenuOpen(false)}
                     >
-                      <BellIcon />
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                        <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+                      </svg>
                       <span className="ml-2">Notifications</span>
-                      {unreadCount > 0 && (
-                        <span className="ml-auto bg-destructive text-destructive-foreground text-xs px-2 py-0.5 rounded-full">
-                          {unreadCount}
-                        </span>
-                      )}
-                    </Button>
+                    </Link>
                     <Link
                       href="/profile"
                       className="flex items-center w-full px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-secondary rounded-lg transition-colors"
@@ -246,7 +262,7 @@ export function Header() {
                         {session.user?.name ?? session.user?.email}
                       </span>
                     </Link>
-                    <Button variant="outline" className="w-full" onClick={() => signOut()}>
+                    <Button variant="outline" className="w-full" onClick={() => signOut({ callbackUrl: '/' })}>
                       Log out
                     </Button>
                   </>

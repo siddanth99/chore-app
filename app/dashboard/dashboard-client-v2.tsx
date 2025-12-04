@@ -267,8 +267,8 @@ export default function DashboardClientV2({ user, role, data }: DashboardClientV
                         dueDate={chore.dueAt ? formatRelativeTime(chore.dueAt) : 'No deadline'}
                         budget={`$${chore.budget || 0}`}
                         isWorkerView={true}
-                        onChat={() => router.push(`/chores/${chore.id}`)}
-                        onMarkComplete={() => router.push(`/chores/${chore.id}`)}
+                        onChat={() => router.push(`/chores/${chore.id}?from=dashboard`)}
+                        onMarkComplete={() => router.push(`/chores/${chore.id}?from=dashboard`)}
                       />
                     ))}
                   </div>
@@ -299,7 +299,7 @@ export default function DashboardClientV2({ user, role, data }: DashboardClientV
                         applicationsCount={chore._count?.applications || 0}
                         budget={`$${chore.budget || 0}`}
                         createdAt={formatRelativeTime(chore.createdAt)}
-                        onView={() => router.push(`/chores/${chore.id}`)}
+                        onView={() => router.push(`/chores/${chore.id}?from=dashboard`)}
                       />
                     ))}
                   </div>
@@ -522,9 +522,10 @@ export default function DashboardClientV2({ user, role, data }: DashboardClientV
                       applicationsCount={chore._count?.applications || 0}
                       budget={`$${chore.budget || 0}`}
                       createdAt={formatRelativeTime(chore.createdAt)}
-                      onView={() => router.push(`/chores/${chore.id}`)}
+                      onView={() => router.push(`/chores/${chore.id}?from=dashboard`)}
                       onEdit={() => router.push(`/chores/${chore.id}/edit`)}
-                      onManage={() => router.push(`/chores/${chore.id}`)}
+                      onManage={() => router.push(`/chores/${chore.id}?from=dashboard`)}
+                      onViewApplications={() => router.push(`/chores/${chore.id}?from=dashboard#applications`)}
                     />
                   ))}
                 </div>
@@ -556,8 +557,8 @@ export default function DashboardClientV2({ user, role, data }: DashboardClientV
                       dueDate={chore.dueAt ? formatRelativeTime(chore.dueAt) : 'No deadline'}
                       budget={`$${chore.budget || 0}`}
                       isWorkerView={false}
-                      onChat={() => router.push(`/chores/${chore.id}`)}
-                      onManage={() => router.push(`/chores/${chore.id}`)}
+                      onChat={() => router.push(`/chores/${chore.id}?from=dashboard`)}
+                      onManage={() => router.push(`/chores/${chore.id}?from=dashboard`)}
                     />
                   ))}
                 </div>
@@ -585,7 +586,7 @@ export default function DashboardClientV2({ user, role, data }: DashboardClientV
                       applicationsCount={0}
                       budget={`$${chore.budget || 0}`}
                       createdAt={formatRelativeTime(chore.createdAt)}
-                      onView={() => router.push(`/chores/${chore.id}`)}
+                      onView={() => router.push(`/chores/${chore.id}?from=dashboard`)}
                       onEdit={() => router.push(`/chores/${chore.id}/edit`)}
                     />
                   ))}
@@ -672,7 +673,7 @@ export default function DashboardClientV2({ user, role, data }: DashboardClientV
                   applicationsCount={chore._count?.applications || 0}
                   budget={`$${chore.budget || 0}`}
                   createdAt={formatRelativeTime(chore.updatedAt || chore.createdAt)}
-                  onView={() => router.push(`/chores/${chore.id}`)}
+                  onView={() => router.push(`/chores/${chore.id}?from=dashboard`)}
                 />
               ))}
             </div>
