@@ -457,7 +457,7 @@ export function ImageUploadZone({
         </div>
       ) : (
         <div className="relative rounded-xl overflow-hidden border border-border">
-          <div className="w-full aspect-[16/9]">
+          <div className="w-full max-h-[400px] overflow-hidden">
             <img
               src={imagePreview || imageUrl}
               alt="Preview"
@@ -468,7 +468,7 @@ export function ImageUploadZone({
             <button
               type="button"
               onClick={onRemove}
-              className="absolute top-2 right-2 p-1.5 bg-destructive rounded-full text-white hover:bg-destructive/90 transition-colors"
+              className="absolute top-3 right-3 p-1.5 bg-destructive rounded-full text-white hover:bg-destructive/90 transition-colors shadow-lg"
               aria-label="Remove image"
             >
               <X className="w-4 h-4" />

@@ -6,8 +6,7 @@ import {
   getChoresWithinDistance,
   getUniqueCategories,
 } from '@/server/api/chores'
-import { BrowseChoresClient } from '@/components/chores/BrowseChoresClient'
-import { Filters } from '@/components/chores/types'
+import ChoresListClient from './chores-list-client'
 
 type RawSearchParams = {
   type?: string
@@ -16,11 +15,6 @@ type RawSearchParams = {
   workerLat?: string
   workerLng?: string
   distanceKm?: string
-  q?: string // Search query for browse-v2
-  categories?: string | string[] // Multiple categories for browse-v2
-  minBudget?: string
-  maxBudget?: string
-  status?: string | string[]
 }
 
 export default async function ChoresPage({
@@ -31,19 +25,18 @@ export default async function ChoresPage({
   // Next 15/16: searchParams is a Promise
   const resolved = await searchParams
 
-  // Build server-side filters (for Prisma query)
-  const serverFilters: { type?: ChoreType; location?: string; category?: string } = {}
+  const filters: { type?: ChoreType; location?: string; category?: string } = {}
 
   if (resolved.type === 'ONLINE' || resolved.type === 'OFFLINE') {
-    serverFilters.type = resolved.type as ChoreType
+    filters.type = resolved.type as ChoreType
   }
 
   if (resolved.location) {
-    serverFilters.location = resolved.location
+    filters.location = resolved.location
   }
 
   if (resolved.category) {
-    serverFilters.category = resolved.category
+    filters.category = resolved.category
   }
 
   const user = await getCurrentUser()
@@ -69,40 +62,19 @@ export default async function ChoresPage({
   const [chores, categories] = await Promise.all([
     isDistanceFilterActive
       ? getChoresWithinDistance(workerLat, workerLng, distanceKm, excludeUserId)
-      : listPublishedChoresWithFilters(serverFilters, excludeUserId),
+      : listPublishedChoresWithFilters(filters, excludeUserId),
     getUniqueCategories(),
   ])
 
-  // Transform URL params to browse-v2 Filters format
-  const browseV2Filters: Filters = {
-    q: resolved.q || undefined,
-    categories: Array.isArray(resolved.categories)
-      ? resolved.categories
-      : resolved.categories
-      ? [resolved.categories]
-      : resolved.category
-      ? [resolved.category]
-      : undefined,
-    type:
-      resolved.type === 'ONLINE'
-        ? 'online'
-        : resolved.type === 'OFFLINE'
-        ? 'offline'
-        : 'all',
-    minBudget: resolved.minBudget ? parseFloat(resolved.minBudget) : undefined,
-    maxBudget: resolved.maxBudget ? parseFloat(resolved.maxBudget) : undefined,
-    status: Array.isArray(resolved.status)
-      ? resolved.status
-      : resolved.status
-      ? [resolved.status]
-      : undefined,
-    nearMe: isDistanceFilterActive,
-  }
-
   return (
-    <BrowseChoresClient
-      initialChores={chores}
-      initialFilters={browseV2Filters}
+    <ChoresListClient
+      chores={chores}
+      user={user}
+      initialFilters={filters}
+      initialWorkerLat={!Number.isNaN(workerLat) ? workerLat : null}
+      initialWorkerLng={!Number.isNaN(workerLng) ? workerLng : null}
+      initialDistanceKm={!Number.isNaN(distanceKm) ? distanceKm : 10}
+      availableCategories={categories}
     />
   )
 }
