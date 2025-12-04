@@ -456,12 +456,14 @@ export function ImageUploadZone({
           </p>
         </div>
       ) : (
-        <div className="relative rounded-xl overflow-hidden">
-          <img
-            src={imagePreview || imageUrl}
-            alt="Preview"
-            className="w-full h-48 object-cover"
-          />
+        <div className="relative rounded-xl overflow-hidden border border-border">
+          <div className="w-full aspect-[16/9]">
+            <img
+              src={imagePreview || imageUrl}
+              alt="Preview"
+              className="w-full h-full object-cover"
+            />
+          </div>
           {!disabled && (
             <button
               type="button"
@@ -663,8 +665,8 @@ export function ChorePreviewCard({
       >
         {/* Image */}
         {imageUrl && (
-          <div className="rounded-lg overflow-hidden -mx-1 -mt-1 mb-3">
-            <img src={imageUrl} alt="Preview" className="w-full h-32 object-cover" />
+          <div className="rounded-lg overflow-hidden -mx-1 -mt-1 mb-3 aspect-[16/9]">
+            <img src={imageUrl} alt="Preview" className="w-full h-full object-cover" />
           </div>
         )}
         

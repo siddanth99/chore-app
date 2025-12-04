@@ -45,8 +45,8 @@ export function CTABanner() {
             </Button>
             <Button
               size="lg"
-              variant="outline"
-              className="border-2 border-white text-white hover:bg-white/10 text-base font-semibold px-8 py-6"
+              variant="ghost"
+              className="border-2 border-white !text-white hover:bg-white/10 text-base font-semibold px-8 py-6"
               onClick={handleBecomeHelper}
               aria-label="Sign up to become a helper"
             >
