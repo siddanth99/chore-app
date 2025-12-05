@@ -9,7 +9,6 @@ import { haversineDistanceKm } from '@/lib/utils/distance';
 import { priceWithinRange } from '@/lib/utils/filters';
 import { toast } from 'react-hot-toast';
 
-
 const STORAGE_KEY = 'choreflow_filters_v1';
 const VIEW_KEY = 'choreflow_view_v1';
 
@@ -35,7 +34,7 @@ interface BrowseChoresClientProps {
 
 /**
  * BrowseChoresClient - Client wrapper for BrowseChoresPageEnhanced
- * 
+ *
  * Transforms server data to browse-v2 format and handles client-side interactions.
  * TODO: Implement URL searchParams sync for filters
  * TODO: Wire up router navigation for onView and onPostChore callbacks
@@ -49,12 +48,12 @@ export function BrowseChoresClient(props: BrowseChoresClientProps) {
    */
   const initialViewFromProps = (props.initialFilters as any)?.view ?? 'grid';
 
-  const [viewMode, setViewMode] = useState<'grid'|'list'|'map'>(() => initialViewFromProps);
+  const [viewMode, setViewMode] = useState<'grid' | 'list' | 'map'>(() => initialViewFromProps);
 
   // Filters: derive initial filters directly from props (server snapshot)
   const [filters, setFilters] = useState(() => {
     // clone to avoid accidental mutation
-    return { ...(props.initialFilters || {}), radius: (props.initialFilters?.radius ?? 5) }
+    return { ...(props.initialFilters || {}), radius: props.initialFilters?.radius ?? 5 };
   });
 
   // chores: start with server snapshot
@@ -66,7 +65,10 @@ export function BrowseChoresClient(props: BrowseChoresClientProps) {
       id: chore.id,
       title: chore.title,
       description: chore.description,
-      category: typeof chore.category === 'string' ? chore.category.toLowerCase() : (chore.category?.id || chore.category?.label || 'uncategorized'),
+      category:
+        typeof chore.category === 'string'
+          ? chore.category.toLowerCase()
+          : chore.category?.id || chore.category?.label || 'uncategorized',
       budget: chore.budget,
       currency: '$',
       type: chore.type === 'ONLINE' ? 'online' : 'offline',
@@ -86,13 +88,13 @@ export function BrowseChoresClient(props: BrowseChoresClientProps) {
   // Compute categories from chores payload (server snapshot)
   const categoriesFromChores = React.useMemo(() => {
     const map = new Map<string, { id: string; label: string }>();
-    (props.initialChores || []).forEach(c => {
+    (props.initialChores || []).forEach((c) => {
       if (!c) return;
       // assume c.category may be object or string; normalize:
       if (typeof c.category === 'object' && c.category?.id) {
-        map.set(c.category.id, { 
-          id: c.category.id, 
-          label: c.category.label ?? c.category.name ?? c.category.id 
+        map.set(c.category.id, {
+          id: c.category.id,
+          label: c.category.label ?? c.category.name ?? c.category.id,
         });
       } else if (typeof c.category === 'string') {
         // If backend stores id string only, we may not have label — use id as label for now
@@ -112,11 +114,12 @@ export function BrowseChoresClient(props: BrowseChoresClientProps) {
   useEffect(() => {
     // Now that we are mounted, we can safely read localStorage and sync
     try {
-      const storedFiltersRaw = typeof window !== 'undefined' ? localStorage.getItem(STORAGE_KEY) : null;
+      const storedFiltersRaw =
+        typeof window !== 'undefined' ? localStorage.getItem(STORAGE_KEY) : null;
       if (storedFiltersRaw) {
         const storedFilters = JSON.parse(storedFiltersRaw);
         // Only apply stored filters if they actually differ (avoid unnecessary rerender)
-        setFilters(prev => ({ ...prev, ...(storedFilters || {}) }));
+        setFilters((prev) => ({ ...prev, ...(storedFilters || {}) }));
       }
       const storedView = typeof window !== 'undefined' ? localStorage.getItem(VIEW_KEY) : null;
       if (storedView && (storedView === 'grid' || storedView === 'list' || storedView === 'map')) {
@@ -157,7 +160,7 @@ export function BrowseChoresClient(props: BrowseChoresClientProps) {
   function clearFilters() {
     const reset = { ...DEFAULT_FILTERS, radius: 5 };
     setFilters(reset);
-    try { 
+    try {
       if (typeof window !== 'undefined') {
         localStorage.removeItem(STORAGE_KEY);
       }
@@ -183,7 +186,7 @@ export function BrowseChoresClient(props: BrowseChoresClientProps) {
 
   // Create chore list with transformed coordinates
   const choresWithCoords = useMemo(() => {
-    return transformedChores.map(c => ({
+    return transformedChores.map((c) => ({
       ...c,
       lat: c.lat ?? null,
       lng: c.lng ?? null,
@@ -193,31 +196,31 @@ export function BrowseChoresClient(props: BrowseChoresClientProps) {
   // compute filtered chores on the client using chores + filters (this uses stable chores state initialized from server)
   const filteredChores = useMemo(() => {
     // Apply price filtering
-    let result = choresWithCoords.filter(c => priceWithinRange(c, filters?.minBudget ?? null, filters?.maxBudget ?? null));
-    
+    let result = choresWithCoords.filter((c) =>
+      priceWithinRange(c, filters?.minBudget ?? null, filters?.maxBudget ?? null),
+    );
+
     // Apply other filters (search, category, type, status, etc.)
     if (filters.q) {
       const q = filters.q.toLowerCase();
-      result = result.filter(c => 
-        c.title.toLowerCase().includes(q) || 
-        c.description.toLowerCase().includes(q)
+      result = result.filter(
+        (c) =>
+          c.title.toLowerCase().includes(q) || c.description.toLowerCase().includes(q),
       );
     }
-    
+
     if (filters.categories?.length) {
-      result = result.filter(c => 
-        filters.categories!.includes(c.category.toLowerCase())
-      );
+      result = result.filter((c) => filters.categories!.includes(c.category.toLowerCase()));
     }
-    
+
     if (filters.type && filters.type !== 'all') {
-      result = result.filter(c => c.type === filters.type);
+      result = result.filter((c) => c.type === filters.type);
     }
-    
+
     if (filters.status?.length) {
-      result = result.filter(c => filters.status!.includes(c.status));
+      result = result.filter((c) => filters.status!.includes(c.status));
     }
-    
+
     return result;
   }, [choresWithCoords, filters]);
 
@@ -225,17 +228,23 @@ export function BrowseChoresClient(props: BrowseChoresClientProps) {
   const visibleChoresInRadius = useMemo(() => {
     const r = Number(filters.radius ?? 0);
     if (!userPos || r <= 0) return filteredChores;
-    const uLat = userPos.lat, uLng = userPos.lng;
-    return filteredChores.filter(c => c.lat != null && c.lng != null && haversineDistanceKm(uLat, uLng, c.lat, c.lng) <= r + 0.0001);
+    const uLat = userPos.lat,
+      uLng = userPos.lng;
+    return filteredChores.filter(
+      (c) =>
+        c.lat != null &&
+        c.lng != null &&
+        haversineDistanceKm(uLat, uLng, c.lat, c.lng) <= r + 0.0001,
+    );
   }, [filteredChores, filters.radius, userPos]);
 
   // Merge server categories from chores with initialCategories prop
   const serverCategories = useMemo(() => {
     const merged = new Map<string, { id: string; label: string }>();
     // Add categories from chores first
-    categoriesFromChores.forEach(cat => merged.set(cat.id, cat));
+    categoriesFromChores.forEach((cat) => merged.set(cat.id, cat));
     // Add initialCategories (from API) if not already present
-    (props.initialCategories || []).forEach(cat => {
+    (props.initialCategories || []).forEach((cat) => {
       if (!merged.has(cat.id)) {
         merged.set(cat.id, cat);
       }
@@ -243,96 +252,113 @@ export function BrowseChoresClient(props: BrowseChoresClientProps) {
     return Array.from(merged.values());
   }, [categoriesFromChores, props.initialCategories]);
 
- // --- robust "No chores found" guard ---
+  // --- robust "No chores found" guard ---
 
-// constants
-const NO_CHORES_TOAST_GLOBAL_KEY = '__CHORE_NO_TOAST_GLOBAL';
-const TOAST_COOLDOWN_MS = 5000; // minimal cooldown between toasts for same filter
-const TOAST_DURATION_MS = 6000;
+  // constants
+  const NO_CHORES_TOAST_GLOBAL_KEY = '__CHORE_NO_TOAST_GLOBAL';
+  const TOAST_COOLDOWN_MS = 5000; // minimal cooldown between toasts for same filter
+  const TOAST_DURATION_MS = 6000;
 
-// keep last filters snapshot so we only show again when filters actually change
-const lastNoChoresFilterRef = useRef<string | null>(null);
-// timestamp of last shown toast
-const lastNoChoresShownAt = useRef<number | null>(null);
+  // keep last filters snapshot so we only show again when filters actually change
+  const lastNoChoresFilterRef = useRef<string | null>(null);
+  // timestamp of last shown toast
+  const lastNoChoresShownAt = useRef<number | null>(null);
 
-// ensure global guard exists
-if (typeof window !== 'undefined' && !(window as any)[NO_CHORES_TOAST_GLOBAL_KEY]) {
-  (window as any)[NO_CHORES_TOAST_GLOBAL_KEY] = { showingFor: null, ts: 0 };
-}
+  // ensure global guard exists
+  if (
+    typeof window !== 'undefined' &&
+    !(window as any)[NO_CHORES_TOAST_GLOBAL_KEY]
+  ) {
+    (window as any)[NO_CHORES_TOAST_GLOBAL_KEY] = { showingFor: null, ts: 0 };
+  }
 
-useEffect(() => {
-  const empty = Array.isArray(visibleChoresInRadius) && visibleChoresInRadius.length === 0;
+  useEffect(() => {
+    const empty =
+      Array.isArray(visibleChoresInRadius) && visibleChoresInRadius.length === 0;
 
-  // serialize the important parts of filters that determine result
-  // choose only the keys that affect the results (radius, categories, q, type, status, nearMe)
-  const filtersSnapshot = JSON.stringify({
-    radius: filters.radius,
-    categories: filters.categories || [],
-    q: filters.q || '',
-    type: filters.type || 'all',
-    status: filters.status || [],
-    nearMe: !!filters.nearMe,
-  });
+    // serialize the important parts of filters that determine result
+    // choose only the keys that affect the results (radius, categories, q, type, status, nearMe)
+    const filtersSnapshot = JSON.stringify({
+      radius: filters.radius,
+      categories: filters.categories || [],
+      q: filters.q || '',
+      type: filters.type || 'all',
+      status: filters.status || [],
+      nearMe: !!filters.nearMe,
+    });
 
-  const now = Date.now();
-  const global = typeof window !== 'undefined' ? (window as any)[NO_CHORES_TOAST_GLOBAL_KEY] : { showingFor: null, ts: 0 };
+    const now = Date.now();
+    const global =
+      typeof window !== 'undefined'
+        ? (window as any)[NO_CHORES_TOAST_GLOBAL_KEY]
+        : { showingFor: null, ts: 0 };
 
-  if (empty) {
-    const lastShown = lastNoChoresShownAt.current ?? 0;
+    if (empty) {
+      const lastShown = lastNoChoresShownAt.current ?? 0;
 
-    // only show if:
-    // - this filtersSnapshot differs from the one that last produced a toast (prevents rerenders)
-    // - AND cooldown has elapsed since last show (prevents rapid repeat)
-    if (lastNoChoresFilterRef.current !== filtersSnapshot || (now - lastShown) > TOAST_COOLDOWN_MS) {
-      // if a global toast for chores is currently showing for the same snapshot, don't create another
-      if (global.showingFor === filtersSnapshot && (now - global.ts) < (TOAST_DURATION_MS + 1000)) {
-        // there is already a global toast for this same filter; skip
-      } else {
-        // show toast with stable id to help toast library dedupe
-        const toastId = `no-chores-${btoa(filtersSnapshot).slice(0, 12)}`; // unique-ish per filters
-        toast(`No chores found within ${filters.radius} km — try increasing radius.`, {
-          id: toastId,
-          icon: 'ℹ️',
-          duration: TOAST_DURATION_MS,
-        });
-        lastNoChoresFilterRef.current = filtersSnapshot;
-        lastNoChoresShownAt.current = now;
-        // update global guard
-        if (typeof window !== 'undefined') {
-          (window as any)[NO_CHORES_TOAST_GLOBAL_KEY] = { showingFor: filtersSnapshot, ts: now };
+      // only show if:
+      // - this filtersSnapshot differs from the one that last produced a toast (prevents rerenders)
+      // - AND cooldown has elapsed since last show (prevents rapid repeat)
+      if (
+        lastNoChoresFilterRef.current !== filtersSnapshot ||
+        now - lastShown > TOAST_COOLDOWN_MS
+      ) {
+        // if a global toast for chores is currently showing for the same snapshot, don't create another
+        if (
+          global.showingFor === filtersSnapshot &&
+          now - global.ts < TOAST_DURATION_MS + 1000
+        ) {
+          // there is already a global toast for this same filter; skip
+        } else {
+          // show toast with stable id to help toast library dedupe
+          const toastId = `no-chores-${btoa(filtersSnapshot).slice(0, 12)}`; // unique-ish per filters
+          toast(`No chores found within ${filters.radius} km — try increasing radius.`, {
+            id: toastId,
+            icon: 'ℹ️',
+            duration: TOAST_DURATION_MS,
+          });
+          lastNoChoresFilterRef.current = filtersSnapshot;
+          lastNoChoresShownAt.current = now;
+          // update global guard
+          if (typeof window !== 'undefined') {
+            (window as any)[NO_CHORES_TOAST_GLOBAL_KEY] = {
+              showingFor: filtersSnapshot,
+              ts: now,
+            };
+          }
         }
       }
-    }
-  } else {
-    // results exist — dismiss any toasts for the previous snapshot(s)
-    try {
-      // attempt to dismiss the specific last toast id if we created it
-      if (lastNoChoresFilterRef.current) {
-        const toastId = `no-chores-${btoa(lastNoChoresFilterRef.current).slice(0, 12)}`;
-        toast.dismiss(toastId);
+    } else {
+      // results exist — dismiss any toasts for the previous snapshot(s)
+      try {
+        // attempt to dismiss the specific last toast id if we created it
+        if (lastNoChoresFilterRef.current) {
+          const toastId = `no-chores-${btoa(
+            lastNoChoresFilterRef.current,
+          ).slice(0, 12)}`;
+          toast.dismiss(toastId);
+        }
+        // reset refs & global state
+        lastNoChoresFilterRef.current = null;
+        lastNoChoresShownAt.current = null;
+        if (typeof window !== 'undefined') {
+          (window as any)[NO_CHORES_TOAST_GLOBAL_KEY] = { showingFor: null, ts: 0 };
+        }
+      } catch (e) {
+        // ignore errors
       }
-      // reset refs & global state
-      lastNoChoresFilterRef.current = null;
-      lastNoChoresShownAt.current = null;
-      if (typeof window !== 'undefined') {
-        (window as any)[NO_CHORES_TOAST_GLOBAL_KEY] = { showingFor: null, ts: 0 };
-      }
-    } catch (e) {
-      // ignore errors
     }
-  }
-  // only depend on visibleChoresInRadius and the specific filter keys we serialized
-}, [
-  visibleChoresInRadius,
-  filters.radius,
-  // add keys explicitly so deep object identity doesn't retrigger
-  ...(Array.isArray(filters.categories) ? filters.categories : []),
-  filters.q,
-  filters.type,
-  ...(Array.isArray(filters.status) ? filters.status : []),
-  filters.nearMe,
-]);
-
+    // only depend on visibleChoresInRadius and the specific filter keys we serialized
+  }, [
+    visibleChoresInRadius,
+    filters.radius,
+    // ✅ FIX: these are now single entries, not spread arrays
+    JSON.stringify(filters.categories ?? []),
+    filters.q,
+    filters.type,
+    JSON.stringify(filters.status ?? []),
+    filters.nearMe,
+  ]);
 
   return (
     <BrowseChoresPageEnhanced
@@ -368,4 +394,3 @@ function mapStatus(status: string): 'published' | 'in_progress' | 'completed' {
       return 'published';
   }
 }
-

@@ -177,10 +177,10 @@ export default function RealMap({ chores = [], userPosition, radius = 5, classNa
   }
 
   // Beautiful modern tiles - Stadiamaps (no API key required)
-  const lightUrl = 'https://tiles.stadiamaps.com/tiles/stamen_toner_lite/{z}/{x}/{y}.png'
-  const darkUrl = 'https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}.png'
-  const tileUrl = useMemo(() => (isDark ? darkUrl : lightUrl), [isDark])
+  const lightUrl = 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png'
+const darkUrl  = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png'
 
+const tileUrl = useMemo(() => (isDark ? darkUrl : lightUrl), [isDark])
   // Default center fallback
   const defaultCenter: [number, number] = userPosition
     ? [userPosition.lat, userPosition.lng]
@@ -236,11 +236,11 @@ export default function RealMap({ chores = [], userPosition, radius = 5, classNa
         <MapResizeOnShow />
         <FitMapToBounds chores={chores} userPosition={userPosition} radius={radius} />
 
-        <TileLayer 
-          url={tileUrl}
-          attribution='&copy; <a href="https://stadiamaps.com/">Stadia Maps</a>, &copy; <a href="https://openmaptiles.org/">OpenMapTiles</a> &copy; <a href="http://openstreetmap.org">OpenStreetMap</a> contributors'
-          maxZoom={19}
-        />
+        <TileLayer
+  url={tileUrl}
+  attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+  maxZoom={19}
+/>
 
         {/* User location marker and circle */}
         {userPosition && (
