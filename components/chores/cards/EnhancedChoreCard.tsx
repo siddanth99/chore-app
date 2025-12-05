@@ -7,6 +7,8 @@ import { Chore, CATEGORIES } from '../types';
 import { cn } from '@/lib/utils';
 import { normalizeKey, findCategoryByChore, type CategoryItem } from '../utils/category';
 import { parsePriceValue } from '@/lib/utils/filters';
+import ClientOnlyDate from '@/components/ui/ClientOnlyDate';
+
 
 // Robust category lookup function
 function findCategoryForChore(chore: Chore | null | undefined, categories: CategoryItem[] = []) {
@@ -111,7 +113,6 @@ export function EnhancedChoreCard({
 
   // Use robust category lookup
   const category = findCategoryForChore(chore, categoriesList);
-  const timeAgo = getTimeAgo(chore.createdAt);
   const statusLabel = chore.status === 'published' ? 'Open' : chore.status === 'in_progress' ? 'In Progress' : 'Done';
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -150,14 +151,16 @@ export function EnhancedChoreCard({
                 {chore.location}
               </span>
             )}
-            <span>{timeAgo}</span>
+            <span>
+              <ClientOnlyDate isoDate={chore.createdAt} mode="relative" />
+            </span>
           </div>
         </div>
 
         {/* Budget & Action */}
         <div className="flex items-center gap-3">
           <span className="px-3 py-1 rounded-full bg-accent/20 text-accent font-semibold text-sm">
-            {formatPrice(chore.budget ?? (chore as any).price ?? null)}
+            {formatPrice(chore, chore.currency)}
           </span>
           <motion.button
             whileHover={{ scale: 1.05 }}
@@ -282,7 +285,7 @@ export function EnhancedChoreCard({
           )}
           <span className="flex items-center gap-1">
             <Clock className="w-3.5 h-3.5" />
-            {timeAgo}
+            <ClientOnlyDate isoDate={chore.createdAt} mode="relative" />
           </span>
           {chore.applications !== undefined && (
             <span className="flex items-center gap-1">
@@ -323,20 +326,6 @@ export function EnhancedChoreCard({
       </div>
     </motion.div>
   );
-}
-
-function getTimeAgo(dateString: string): string {
-  const date = new Date(dateString);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffMins = Math.floor(diffMs / 60000);
-  const diffHours = Math.floor(diffMins / 60);
-  const diffDays = Math.floor(diffHours / 24);
-
-  if (diffMins < 60) return `${diffMins}m ago`;
-  if (diffHours < 24) return `${diffHours}h ago`;
-  if (diffDays < 7) return `${diffDays}d ago`;
-  return date.toLocaleDateString();
 }
 
 function formatPrice(chore: any, currency: string = '$'): string {

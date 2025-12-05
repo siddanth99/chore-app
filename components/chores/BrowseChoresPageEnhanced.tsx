@@ -206,16 +206,58 @@ export function BrowseChoresPageEnhanced({
   
   // Show toast when radius > 0 and no chores found
   useEffect(() => {
-    if (viewMode === 'map' && filters.radius && filters.radius > 0 && visibleCount === 0 && userPosition) {
-      const timer = setTimeout(() => {
+    const KEY = '__NO_CHORES_TOAST_LOCK';
+  
+    // only run when in map view and no visible chores and user position known
+    if (!(viewMode === 'map' && filters.radius && filters.radius > 0 && visibleCount === 0 && userPosition)) {
+      // if results appear, reset the global lock so future empty results can show again
+      if (typeof window !== 'undefined' && (window as any)[KEY]) {
+        (window as any)[KEY] = { snapshot: null, ts: 0 };
+      }
+      return;
+    }
+  
+    // build a compact snapshot of the relevant filter state
+    const snapshot = JSON.stringify({
+      radius: filters.radius,
+      viewMode,
+    });
+  
+    // ensure global lock object exists
+    if (typeof window !== 'undefined' && !(window as any)[KEY]) {
+      (window as any)[KEY] = { snapshot: null, ts: 0 };
+    }
+  
+    const global = typeof window !== 'undefined' ? (window as any)[KEY] : { snapshot: null, ts: 0 };
+    const now = Date.now();
+    const COOLDOWN = 8000; // ms
+  
+    // If we've already shown for the same snapshot recently, skip
+    if (global.snapshot === snapshot && (now - global.ts) < COOLDOWN) {
+      return;
+    }
+  
+    const timer = setTimeout(() => {
+      try {
         info(
           'No chores found',
           `No chores found within ${filters.radius} km — try increasing radius.`
         );
-      }, 500); // Small delay to avoid showing immediately on mount
-      return () => clearTimeout(timer);
-    }
+      } catch (e) {
+        // swallow any errors from the toast system
+      }
+  
+      // record that we've shown the toast for this snapshot
+      if (typeof window !== 'undefined') {
+        (window as any)[KEY] = { snapshot, ts: Date.now() };
+      }
+    }, 500); // small delay to avoid showing immediately on mount
+  
+    return () => {
+      clearTimeout(timer);
+    };
   }, [viewMode, filters.radius, visibleCount, userPosition, info]);
+  
 
   // Detect dark mode
   const [isDark, setIsDark] = useState(false);

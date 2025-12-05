@@ -3,10 +3,12 @@
 import { BrowseChoresPageEnhanced } from './BrowseChoresPageEnhanced';
 import { Chore, Filters } from './types';
 import { useRouter } from 'next/navigation';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useRef } from 'react';
 import useUserLocation from '@/lib/hooks/useUserLocation';
 import { haversineDistanceKm } from '@/lib/utils/distance';
 import { priceWithinRange } from '@/lib/utils/filters';
+import { toast } from 'react-hot-toast';
+
 
 const STORAGE_KEY = 'choreflow_filters_v1';
 const VIEW_KEY = 'choreflow_view_v1';
@@ -240,6 +242,97 @@ export function BrowseChoresClient(props: BrowseChoresClientProps) {
     });
     return Array.from(merged.values());
   }, [categoriesFromChores, props.initialCategories]);
+
+ // --- robust "No chores found" guard ---
+
+// constants
+const NO_CHORES_TOAST_GLOBAL_KEY = '__CHORE_NO_TOAST_GLOBAL';
+const TOAST_COOLDOWN_MS = 5000; // minimal cooldown between toasts for same filter
+const TOAST_DURATION_MS = 6000;
+
+// keep last filters snapshot so we only show again when filters actually change
+const lastNoChoresFilterRef = useRef<string | null>(null);
+// timestamp of last shown toast
+const lastNoChoresShownAt = useRef<number | null>(null);
+
+// ensure global guard exists
+if (typeof window !== 'undefined' && !(window as any)[NO_CHORES_TOAST_GLOBAL_KEY]) {
+  (window as any)[NO_CHORES_TOAST_GLOBAL_KEY] = { showingFor: null, ts: 0 };
+}
+
+useEffect(() => {
+  const empty = Array.isArray(visibleChoresInRadius) && visibleChoresInRadius.length === 0;
+
+  // serialize the important parts of filters that determine result
+  // choose only the keys that affect the results (radius, categories, q, type, status, nearMe)
+  const filtersSnapshot = JSON.stringify({
+    radius: filters.radius,
+    categories: filters.categories || [],
+    q: filters.q || '',
+    type: filters.type || 'all',
+    status: filters.status || [],
+    nearMe: !!filters.nearMe,
+  });
+
+  const now = Date.now();
+  const global = typeof window !== 'undefined' ? (window as any)[NO_CHORES_TOAST_GLOBAL_KEY] : { showingFor: null, ts: 0 };
+
+  if (empty) {
+    const lastShown = lastNoChoresShownAt.current ?? 0;
+
+    // only show if:
+    // - this filtersSnapshot differs from the one that last produced a toast (prevents rerenders)
+    // - AND cooldown has elapsed since last show (prevents rapid repeat)
+    if (lastNoChoresFilterRef.current !== filtersSnapshot || (now - lastShown) > TOAST_COOLDOWN_MS) {
+      // if a global toast for chores is currently showing for the same snapshot, don't create another
+      if (global.showingFor === filtersSnapshot && (now - global.ts) < (TOAST_DURATION_MS + 1000)) {
+        // there is already a global toast for this same filter; skip
+      } else {
+        // show toast with stable id to help toast library dedupe
+        const toastId = `no-chores-${btoa(filtersSnapshot).slice(0, 12)}`; // unique-ish per filters
+        toast(`No chores found within ${filters.radius} km — try increasing radius.`, {
+          id: toastId,
+          icon: 'ℹ️',
+          duration: TOAST_DURATION_MS,
+        });
+        lastNoChoresFilterRef.current = filtersSnapshot;
+        lastNoChoresShownAt.current = now;
+        // update global guard
+        if (typeof window !== 'undefined') {
+          (window as any)[NO_CHORES_TOAST_GLOBAL_KEY] = { showingFor: filtersSnapshot, ts: now };
+        }
+      }
+    }
+  } else {
+    // results exist — dismiss any toasts for the previous snapshot(s)
+    try {
+      // attempt to dismiss the specific last toast id if we created it
+      if (lastNoChoresFilterRef.current) {
+        const toastId = `no-chores-${btoa(lastNoChoresFilterRef.current).slice(0, 12)}`;
+        toast.dismiss(toastId);
+      }
+      // reset refs & global state
+      lastNoChoresFilterRef.current = null;
+      lastNoChoresShownAt.current = null;
+      if (typeof window !== 'undefined') {
+        (window as any)[NO_CHORES_TOAST_GLOBAL_KEY] = { showingFor: null, ts: 0 };
+      }
+    } catch (e) {
+      // ignore errors
+    }
+  }
+  // only depend on visibleChoresInRadius and the specific filter keys we serialized
+}, [
+  visibleChoresInRadius,
+  filters.radius,
+  // add keys explicitly so deep object identity doesn't retrigger
+  ...(Array.isArray(filters.categories) ? filters.categories : []),
+  filters.q,
+  filters.type,
+  ...(Array.isArray(filters.status) ? filters.status : []),
+  filters.nearMe,
+]);
+
 
   return (
     <BrowseChoresPageEnhanced
