@@ -6,7 +6,7 @@ export default async function NewChorePage() {
   try {
     await requireRole('CUSTOMER')
   } catch (error) {
-    redirect('/login')
+    redirect('/signin')
   }
 
   // ChoreForm uses CreateChoreLayout which provides its own full-page layout,

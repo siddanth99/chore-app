@@ -7,7 +7,7 @@ export default async function NotificationsPage() {
   const user = await getCurrentUser()
 
   if (!user) {
-    redirect('/login')
+    redirect('/signin')
   }
 
   const allNotifications = await listNotificationsForUser(user.id)

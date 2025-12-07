@@ -11,7 +11,7 @@ export default async function ApplicationsPage() {
 
     return <ApplicationsList applications={applications} />
   } catch (error) {
-    redirect('/login')
+    redirect('/signin')
   }
 }
 

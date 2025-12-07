@@ -3,12 +3,12 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-  "dev": "next dev",
-  "build": "next build",
-  "start": "next start",
-  "lint": "next lint",
-  "postinstall": "prisma generate"
-},
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "postinstall": "prisma generate"
+  },
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.1",
     "@prisma/client": "^5.16.2",
@@ -16,10 +16,13 @@
     "@radix-ui/react-slot": "^1.2.4",
     "@upstash/ratelimit": "^2.0.7",
     "@upstash/redis": "^1.35.7",
+    "argon2": "^0.44.0",
     "bcryptjs": "^3.0.3",
+    "bullmq": "^5.65.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "framer-motion": "^12.23.25",
+    "ioredis": "^5.8.2",
     "leaflet": "^1.9.4",
     "lucide-react": "^0.555.0",
     "next": "16.0.3",

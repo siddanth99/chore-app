@@ -20,9 +20,57 @@ export const authOptions: NextAuthOptions = {
       credentials: {
         email: { label: 'Email', type: 'email' },
         password: { label: 'Password', type: 'password' },
+        phone: { label: 'Phone', type: 'text' },
+        otp: { label: 'OTP', type: 'text' },
       },
       async authorize(credentials) {
         try {
+          // Handle phone + OTP authentication
+          if (credentials?.phone && credentials?.otp) {
+            const phoneVerification = await prisma.phoneVerification.findUnique({
+              where: { phone: credentials.phone },
+            })
+
+            if (!phoneVerification || !phoneVerification.verified) {
+              console.log('[NextAuth] Phone OTP not verified:', credentials.phone)
+              return null
+            }
+
+            // Verify OTP is still valid (check expiry)
+            if (phoneVerification.expiresAt < new Date()) {
+              console.log('[NextAuth] Phone OTP expired:', credentials.phone)
+              return null
+            }
+
+            // Find user by phone
+            const user = await prisma.user.findFirst({
+              where: { phone: credentials.phone },
+            })
+
+            if (!user) {
+              console.log('[NextAuth] User not found for phone:', credentials.phone)
+              return null
+            }
+
+            // Verify OTP hash
+            const { verifyOtpHash } = await import('@/lib/otp')
+            const isValid = await verifyOtpHash(phoneVerification.otpHash, credentials.otp)
+
+            if (!isValid) {
+              console.log('[NextAuth] Invalid OTP for phone:', credentials.phone)
+              return null
+            }
+
+            console.log('[NextAuth] Successful phone OTP login for:', credentials.phone)
+            return {
+              id: user.id,
+              name: user.name,
+              email: user.email,
+              role: user.role,
+            }
+          }
+
+          // Handle email + password authentication (existing flow)
           if (!credentials?.email || !credentials?.password) {
             console.log('[NextAuth] Missing credentials')
             return null
@@ -79,7 +127,7 @@ export const authOptions: NextAuthOptions = {
     strategy: 'jwt',
   },
   pages: {
-    signIn: '/login',
+    signIn: '/signin',
   },
   secret: process.env.NEXTAUTH_SECRET,
   debug: process.env.NODE_ENV === 'development',

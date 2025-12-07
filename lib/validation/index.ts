@@ -9,6 +9,7 @@ export * from './chore.schema'
 export * from './application.schema'
 export * from './profile.schema'
 export * from './image'
+export * from './otp.schema'
 
 // Re-export Zod for convenience
 export { z } from 'zod'
