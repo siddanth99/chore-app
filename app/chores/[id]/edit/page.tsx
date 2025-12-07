@@ -17,7 +17,7 @@ export default async function EditChorePage({
   try {
     user = await requireRole(UserRole.CUSTOMER)
   } catch {
-    redirect('/login')
+    redirect('/signin')
   }
 
   const chore = await getChoreById(id)

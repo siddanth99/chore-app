@@ -99,9 +99,9 @@ export default function Navbar() {
                 </Button>
               </>
             ) : (
-              <Link href="/login">
+              <Link href="/signin">
                 <Button variant="primary" size="sm">
-                  Log in
+                  Sign in
                 </Button>
               </Link>
             )}

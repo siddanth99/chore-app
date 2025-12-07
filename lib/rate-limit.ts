@@ -178,6 +178,18 @@ export const messageSendLimiter = createLimiter(30, '1 h', 'message_send')
  */
 export const fileUploadLimiter = createLimiter(10, '1 h', 'file_upload')
 
+/**
+ * OTP request: 5 per hour per phone
+ * Prevents SMS spam and abuse
+ */
+export const otpRequestLimiter = createLimiter(5, '1 h', 'otp_request')
+
+/**
+ * OTP verification: 20 per hour per phone
+ * Allows multiple attempts but prevents brute force
+ */
+export const otpVerifyLimiter = createLimiter(20, '1 h', 'otp_verify')
+
 // ============================================================================
 // Helper Functions
 // ============================================================================

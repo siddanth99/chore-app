@@ -336,3 +336,34 @@ model NotificationDelivery {
   @@index([userId, createdAt])
   @@map("notification_deliveries")
 }
+
+// Phone Verification model for SMS OTP
+model PhoneVerification {
+  id         String   @id @default(cuid())
+  phone      String   @unique
+  otpHash    String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  verified   Boolean  @default(false)
+  attempts   Int      @default(0)
+  metadata   Json?    // optional: store provider response / txn ids
+
+  @@index([phone])
+  @@map("phone_verifications")
+}
+
+// Temporary signup storage for phone-verified signups
+model SignupTemp {
+  id          String   @id @default(cuid())
+  name        String
+  email       String   @unique
+  passwordHash String
+  phone       String?
+  createdAt   DateTime @default(now())
+  expiresAt   DateTime?
+  metadata    Json?
+
+  @@index([email])
+  @@index([phone])
+  @@map("signup_temps")
+}
