@@ -1,5 +1,6 @@
 import { NextAuthOptions } from 'next-auth'
 import CredentialsProvider from 'next-auth/providers/credentials'
+import GoogleProvider from 'next-auth/providers/google'
 import { PrismaAdapter } from '@auth/prisma-adapter'
 import { prisma } from '../db/client'
 import { compare } from 'bcryptjs'
@@ -10,11 +11,43 @@ if (!process.env.NEXTAUTH_SECRET) {
   console.warn('[NextAuth] Warning: NEXTAUTH_SECRET is not set. Authentication will fail.')
 }
 
+// Create custom adapter that maps Google's `image` field to Prisma's `avatarUrl`
+const baseAdapter = PrismaAdapter(prisma) as any
+const customAdapter = {
+  ...baseAdapter,
+  async createUser(data: { name?: string | null; email?: string | null; emailVerified?: Date | null; image?: string | null; [key: string]: any }) {
+    // Extract `image` and `emailVerified` fields
+    // Exclude both from the data passed to Prisma
+    // - `image` is mapped to `avatarUrl` (Prisma doesn't have `image`)
+    // - `emailVerified` is not stored in our schema, so we drop it
+    const { image, emailVerified, ...restData } = data
+    
+    // Create user with mapped fields
+    // Note: name and email are required by Prisma schema, so they should be present from OAuth
+    // hashedPassword is optional (String?) so we omit it for OAuth users
+    return prisma.user.create({
+      data: {
+        name: restData.name ?? '',
+        email: restData.email ?? '',
+        avatarUrl: image ?? null, // Map Google profile picture to avatarUrl
+        // Default role to CUSTOMER for OAuth users (same as email signup)
+        role: 'CUSTOMER',
+        // hashedPassword is optional, omit it for OAuth users
+        // emailVerified is not stored in our schema, so we don't pass it
+      } as any, // Type assertion to handle Prisma's complex input types
+    })
+  },
+}
+
 export const authOptions: NextAuthOptions = {
   // Note: When using CredentialsProvider with JWT strategy, the adapter is only used
   // for account linking, not session management. This is the recommended pattern.
-  adapter: PrismaAdapter(prisma) as any,
+  adapter: customAdapter,
   providers: [
+    GoogleProvider({
+      clientId: process.env.GOOGLE_CLIENT_ID ?? '',
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET ?? '',
+    }),
     CredentialsProvider({
       name: 'Credentials',
       credentials: {
@@ -121,6 +154,11 @@ export const authOptions: NextAuthOptions = {
         session.user.role = token.role as UserRole
       }
       return session
+    },
+    async redirect({ url, baseUrl }) {
+      // Always redirect to dashboard after successful sign-in
+      // This applies to Google OAuth, email/password, and any other provider
+      return `${baseUrl}/dashboard`
     },
   },
   session: {

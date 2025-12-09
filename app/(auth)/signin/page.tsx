@@ -4,11 +4,11 @@
 
 'use client';
 
-import { useState, Suspense } from 'react';
+import { useState, Suspense, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { signIn } from 'next-auth/react';
+import { signIn, useSession } from 'next-auth/react';
 import { 
   Mail, 
   Lock, 
@@ -30,13 +30,26 @@ const FEATURE_BADGES = [
   { icon: MapPin, text: 'Location-based', color: 'from-primary to-accent' },
 ];
 
+function GoogleIcon() {
+  return (
+    <svg className="w-5 h-5" viewBox="0 0 24 24">
+      <path fill="#EA4335" d="M12 11v3.6h5.1C16.6 17.6 14.6 19 12 19c-3.3 0-6-2.7-6-6s2.7-6 6-6c1.5 0 2.9.6 3.9 1.5l2.6-2.6C16.9 4.3 14.6 3.4 12 3.4 6.9 3.4 2.8 7.5 2.8 12.6S6.9 21.8 12 21.8c5 0 8.6-3.5 8.6-8.6 0-.6-.1-1.2-.2-1.8H12z" />
+      <path fill="#34A853" d="M3.9 7.2l3 2.2C7.5 7.4 9.6 6 12 6c1.5 0 2.9.6 3.9 1.5l2.6-2.6C16.9 3.3 14.6 2.4 12 2.4 8.2 2.4 5 4.6 3.9 7.2z" />
+      <path fill="#4A90E2" d="M12 21.8c2.6 0 4.9-.9 6.5-2.4l-2.5-2.1c-.7.5-1.7.8-2.7.8-2.6 0-4.8-1.8-5.5-4.2l-3 2.3C6 19.5 8.8 21.8 12 21.8z" />
+      <path fill="#FBBC05" d="M20.6 13.2c.1-.6.2-1.2.2-1.8 0-.6-.1-1.2-.2-1.8H12v3.6h5.1c-.2 1-.7 1.8-1.5 2.4l2.5 2.1c1.4-1.3 2.3-3.2 2.3-5.5z" />
+    </svg>
+  );
+}
+
 // Category chips
 const CATEGORIES = ['Cleaning', 'Delivery', 'Moving', 'Pet Care', 'Gardening', 'Handyman'];
 
 function SignInPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { data: session, status } = useSession();
 
+  // State declarations (must be before early returns)
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -47,6 +60,23 @@ function SignInPageContent() {
   const [signInMethod, setSignInMethod] = useState<'email' | 'phone'>('email');
   const [phone, setPhone] = useState('');
   const [phoneLoading, setPhoneLoading] = useState(false);
+
+  // Redirect to dashboard if user is already logged in
+  useEffect(() => {
+    if (status === 'authenticated' && session?.user) {
+      router.replace('/dashboard');
+    }
+  }, [status, session, router]);
+
+  // Don't render signin UI if user is already authenticated (prevents flicker)
+  if (status === 'authenticated' && session?.user) {
+    return null;
+  }
+
+  // Show nothing while checking session status
+  if (status === 'loading') {
+    return null;
+  }
 
   // ---------------------------
   // EMAIL SIGN-IN
@@ -205,6 +235,18 @@ function SignInPageContent() {
             <div className="text-center mb-8">
               <h2 className="text-2xl font-bold text-foreground mb-2">Welcome back</h2>
               <p className="text-muted-foreground">Sign in to continue</p>
+
+              {/* Google Sign-In */}
+              <div className="mt-6">
+                <button
+                  type="button"
+                  onClick={() => signIn('google')}
+                  className="w-full flex items-center justify-center gap-2 rounded-xl border border-border bg-secondary/50 px-4 py-3 text-sm font-medium text-foreground hover:bg-secondary transition-colors"
+                >
+                  <GoogleIcon />
+                  Continue with Google
+                </button>
+              </div>
 
               {/* Toggle Email / Phone */}
               <div className="flex justify-center gap-4 mt-6">
