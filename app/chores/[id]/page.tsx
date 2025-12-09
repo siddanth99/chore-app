@@ -2,7 +2,6 @@ import { getChoreById } from '@/server/api/chores'
 import { getCurrentUser } from '@/server/auth/role'
 import { listApplicationsForChore } from '@/server/api/applications'
 import { getAverageRating } from '@/server/api/ratings'
-import { getChorePaymentsAndSummary } from '@/server/api/payments'
 import ChoreDetailClient from './chore-detail-client'
 
 export default async function ChoreDetailPage(props: {
@@ -70,28 +69,6 @@ export default async function ChoreDetailPage(props: {
       ? (chore as any).cancellationRequests[0]
       : null
 
-  // Fetch payments and payment summary (only if user is owner or assigned worker)
-  let payments: any[] | null = null
-  let paymentSummary: any | null = null
-  const canViewPayments =
-    user &&
-    ((user.role === 'CUSTOMER' && chore.createdById === user.id) ||
-      (chore.assignedWorkerId === user.id))
-
-  if (canViewPayments) {
-    try {
-      const { payments: fetchedPayments, summary } = await getChorePaymentsAndSummary(chore.id)
-      // Convert Date objects to ISO strings for client
-      payments = fetchedPayments.map((p: any) => ({
-        ...p,
-        createdAt: p.createdAt.toISOString(),
-      }))
-      paymentSummary = summary
-    } catch (error) {
-      console.error('Error loading payments:', error)
-    }
-  }
-
   // If chore exists, show the real client page
   return (
     <ChoreDetailClient
@@ -100,8 +77,6 @@ export default async function ChoreDetailPage(props: {
       initialApplications={applications}
       assignedWorkerRating={assignedWorkerRating}
       latestCancellationRequest={latestCancellationRequest}
-      payments={payments}
-      paymentSummary={paymentSummary}
     />
   )
 }

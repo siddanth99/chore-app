@@ -101,8 +101,8 @@ function SignUpPageContent() {
       // Prepare phone number with country code
       const fullPhone = formData.phone ? `${countryCode.code}${formData.phone}` : null;
 
-      // Call signup-request endpoint
-      const response = await fetch('/api/auth/signup-request', {
+      // Call signup endpoint (always use /api/auth/signup, never /api/auth/signup-request)
+      const response = await fetch('/api/auth/signup', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -124,14 +124,8 @@ function SignUpPageContent() {
         return;
       }
 
-      // If phone provided, redirect to OTP verification
-      if (fullPhone && data.tempId) {
-        router.push(`/otp-verify?tempId=${data.tempId}&phone=${encodeURIComponent(fullPhone)}`);
-        return;
-      }
-
-      // No phone - user created immediately, sign them in
-      if (data.created && data.userId) {
+      // User created successfully - auto-sign them in
+      if (data.user && data.user.id) {
         const callbackUrl = searchParams.get('callbackUrl') || '/dashboard';
         
         const signInResult = await signIn('credentials', {
@@ -150,10 +144,12 @@ function SignUpPageContent() {
         // Success - redirect to dashboard or callback URL
         router.push(callbackUrl);
         router.refresh();
-      } else {
-        setError('Unexpected response from server');
-        setIsLoading(false);
+        return;
       }
+
+      // Fallback: redirect to signin if auto-sign-in fails for any reason
+      router.push('/signin?email=' + encodeURIComponent(formData.email));
+      router.refresh();
     } catch (err) {
       console.error('Signup error:', err);
       setError('An error occurred. Please try again.');
