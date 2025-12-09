@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { useSession } from 'next-auth/react'
 import Link from 'next/link'
 import EditProfileModal from './EditProfileModal'
 import ReviewsList from './ReviewsList'
@@ -135,10 +136,49 @@ export default function ProfilePageView({
   stats,
 }: ProfilePageViewProps) {
   const router = useRouter()
+  const { update } = useSession()
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [currentProfile, setCurrentProfile] = useState(profile)
+  const [isUpdatingRole, setIsUpdatingRole] = useState(false)
 
   const isWorker = currentProfile.role === 'WORKER'
+  const currentRole = currentProfile.role as 'CUSTOMER' | 'WORKER'
+
+  const handleRoleToggle = async (newRole: 'CUSTOMER' | 'WORKER') => {
+    if (newRole === currentRole || isUpdatingRole) return
+
+    setIsUpdatingRole(true)
+    try {
+      const response = await fetch('/api/profile/role', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ role: newRole }),
+      })
+
+      if (!response.ok) {
+        const data = await response.json()
+        console.error('Failed to update role:', data.error)
+        return
+      }
+
+      // Update local profile state
+      setCurrentProfile({
+        ...currentProfile,
+        role: newRole,
+      })
+
+      // Update the session to reflect the new role
+      await update()
+      // Refresh the page to load the correct data
+      router.refresh()
+    } catch (error) {
+      console.error('Error updating role:', error)
+    } finally {
+      setIsUpdatingRole(false)
+    }
+  }
   
   const initials = currentProfile.name
     .split(' ')
@@ -253,18 +293,37 @@ export default function ProfilePageView({
                       {initials}
                     </div>
                   )}
-                  {/* Role badge */}
-                  <span className={cn(
-                    'absolute -bottom-2 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap',
-                    isWorker 
-                      ? 'bg-emerald-500 text-white' 
-                      : 'bg-primary text-white'
-                  )}>
-                    {isWorker ? '🛠 Worker' : '👤 Customer'}
-                  </span>
                 </div>
 
                 <div className="flex-1 text-center sm:text-left">
+                  {/* Role Toggle */}
+                  <div className="flex items-center justify-center sm:justify-start gap-3 mb-4">
+                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-border bg-card">
+                      <button
+                        onClick={() => handleRoleToggle('CUSTOMER')}
+                        disabled={isUpdatingRole}
+                        className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
+                          currentRole === 'CUSTOMER'
+                            ? 'bg-primary text-primary-foreground'
+                            : 'text-muted-foreground hover:text-foreground'
+                        } ${isUpdatingRole ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      >
+                        Customer
+                      </button>
+                      <div className="h-4 w-px bg-border" />
+                      <button
+                        onClick={() => handleRoleToggle('WORKER')}
+                        disabled={isUpdatingRole}
+                        className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
+                          currentRole === 'WORKER'
+                            ? 'bg-primary text-primary-foreground'
+                            : 'text-muted-foreground hover:text-foreground'
+                        } ${isUpdatingRole ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      >
+                        Worker
+                      </button>
+                    </div>
+                  </div>
                   <h1 className="text-2xl sm:text-3xl font-bold text-foreground">
                     {currentProfile.name}
                   </h1>

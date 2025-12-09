@@ -8,7 +8,7 @@ type UserRole = $Enums.UserRole
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { name, email, password, phone, role } = body
+    const { name, email, password, phone } = body
 
     // Validate input
     if (!name || !email || !password) {
@@ -18,10 +18,9 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Role defaults to CUSTOMER if not provided or invalid
-    const userRole = role && (role === 'CUSTOMER' || role === 'WORKER') 
-      ? (role as UserRole)
-      : 'CUSTOMER'
+    // Default role to CUSTOMER for all new signups
+    // Users can switch roles later via the dashboard/profile toggle
+    const userRole: UserRole = 'CUSTOMER'
 
     // Check if user already exists
     const existingUser = await prisma.user.findUnique({
