@@ -1,12 +1,6 @@
 import { prisma } from '../db/client'
 import { ChoreStatus, ApplicationStatus } from '@prisma/client'
 import { getAverageRating } from './ratings'
-import {
-  getWorkerPaymentDashboard,
-  getCustomerPaymentDashboard,
-  WorkerPaymentDashboard,
-  CustomerPaymentDashboard,
-} from './payments'
 
 export interface WorkerDashboardData {
   stats: {
@@ -20,7 +14,7 @@ export interface WorkerDashboardData {
   inProgressChores: any[]
   completedChores: any[]
   cancelledChores: any[]
-  paymentDashboard: WorkerPaymentDashboard
+  paymentDashboard: null
 }
 
 export interface CustomerDashboardData {
@@ -35,7 +29,7 @@ export interface CustomerDashboardData {
   activeChores: any[]
   completedChores: any[]
   cancelledChores: any[]
-  paymentDashboard: CustomerPaymentDashboard
+  paymentDashboard: null
 }
 
 /**
@@ -49,7 +43,6 @@ export async function getWorkerDashboardData(workerId: string): Promise<WorkerDa
     completedChores,
     allCompletedChores,
     cancelledChores,
-    paymentDashboard,
   ] = await Promise.all([
     // Assigned chores (including cancellation requested that were originally ASSIGNED)
     prisma.chore.findMany({
@@ -212,8 +205,6 @@ export async function getWorkerDashboardData(workerId: string): Promise<WorkerDa
         updatedAt: 'desc',
       },
       }),
-    // Payment dashboard data
-    getWorkerPaymentDashboard(workerId),
   ])
 
   // Get rating stats
@@ -268,7 +259,7 @@ export async function getWorkerDashboardData(workerId: string): Promise<WorkerDa
     inProgressChores: inProgressChoresFiltered,
     completedChores,
     cancelledChores,
-    paymentDashboard,
+    paymentDashboard: null,
   }
 }
 
@@ -286,7 +277,6 @@ export async function getCustomerDashboardData(
     completedChores,
     allChores,
     cancelledChores,
-    paymentDashboard,
   ] = await Promise.all([
       // Draft chores
       prisma.chore.findMany({
@@ -451,8 +441,6 @@ export async function getCustomerDashboardData(
           updatedAt: 'desc',
         },
       }),
-    // Payment dashboard data
-    getCustomerPaymentDashboard(customerId),
   ])
 
   // Get count of ratings given by this customer
@@ -490,7 +478,7 @@ export async function getCustomerDashboardData(
     activeChores,
     completedChores,
     cancelledChores,
-    paymentDashboard,
+    paymentDashboard: null,
   }
 }
 

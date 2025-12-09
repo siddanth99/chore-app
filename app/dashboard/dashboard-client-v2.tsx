@@ -56,7 +56,6 @@ import { LovableDashboardChoreCard } from '@/components/dashboard/LovableDashboa
 // Shared UI components
 import LogoutButton from './logout-button'
 import { Button } from '@/components/ui/button'
-import Card from '@/components/ui/Card'
 import Badge from '@/components/ui/Badge'
 import { cn } from '@/lib/utils'
 
@@ -143,16 +142,7 @@ const Icons = {
 // -----------------------------------------------------------------------------
 export default function DashboardClientV2({ user, role, data }: DashboardClientV2Props) {
   const router = useRouter()
-  const [reportFrom, setReportFrom] = useState<string>('')
-  const [reportTo, setReportTo] = useState<string>('')
 
-  const handleDownloadCSV = () => {
-    const params = new URLSearchParams()
-    params.set('format', 'csv')
-    if (reportFrom) params.set('from', reportFrom)
-    if (reportTo) params.set('to', reportTo)
-    window.location.href = `/api/payments/report?${params.toString()}`
-  }
 
   // TODO: Fetch notifications from API or pass via props
   // For now, using placeholder data
@@ -320,32 +310,6 @@ export default function DashboardClientV2({ user, role, data }: DashboardClientV
                 onViewAll={() => router.push('/notifications')}
               />
 
-              {/* Earnings Summary Card */}
-              {workerData.paymentDashboard && (
-                <div className="rounded-2xl border border-border/50 bg-gradient-to-br from-primary/5 to-accent/5 p-5 backdrop-blur-sm">
-                  <h3 className="font-semibold text-foreground mb-4">Earnings Summary</h3>
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-muted-foreground">All Time</span>
-                      <span className="font-semibold text-foreground">
-                        ${workerData.paymentDashboard.totalEarnedAllTime.toLocaleString()}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-muted-foreground">Last 30 Days</span>
-                      <span className="font-semibold text-foreground">
-                        ${workerData.paymentDashboard.totalEarnedLast30Days.toLocaleString()}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-muted-foreground">Unsettled</span>
-                      <span className="font-semibold text-foreground">
-                        {workerData.paymentDashboard.unsettledCompletedChores.length} chores
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              )}
 
               {/* Rating Card */}
               <div className="rounded-2xl border border-border/50 bg-gradient-to-br from-highlight/5 to-accent/5 p-5 backdrop-blur-sm">
@@ -376,42 +340,6 @@ export default function DashboardClientV2({ user, role, data }: DashboardClientV
             </div>
           </div>
 
-          {/* Payment Export Section */}
-          {workerData.paymentDashboard && (
-            <section>
-              <SectionHeader
-                title="Export Earnings"
-                subtitle="Download your earnings report"
-              />
-              <Card className="p-6">
-                <div className="grid gap-4 sm:grid-cols-3">
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-muted-foreground">From Date</label>
-                    <input
-                      type="date"
-                      value={reportFrom}
-                      onChange={(e) => setReportFrom(e.target.value)}
-                      className="block w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-muted-foreground">To Date</label>
-                    <input
-                      type="date"
-                      value={reportTo}
-                      onChange={(e) => setReportTo(e.target.value)}
-                      className="block w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                    />
-                  </div>
-                  <div className="flex items-end">
-                    <Button variant="secondary" size="sm" onClick={handleDownloadCSV} className="w-full">
-                      Download CSV
-                    </Button>
-                  </div>
-                </div>
-              </Card>
-            </section>
-          )}
         </main>
       </div>
     )
@@ -604,32 +532,6 @@ export default function DashboardClientV2({ user, role, data }: DashboardClientV
               onViewAll={() => router.push('/notifications')}
             />
 
-            {/* Spending Summary Card */}
-            {customerData.paymentDashboard && (
-              <div className="rounded-2xl border border-border/50 bg-gradient-to-br from-primary/5 to-accent/5 p-5 backdrop-blur-sm">
-                <h3 className="font-semibold text-foreground mb-4">Spending Summary</h3>
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-muted-foreground">All Time</span>
-                    <span className="font-semibold text-foreground">
-                      ${customerData.paymentDashboard.totalPaidAllTime.toLocaleString()}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-muted-foreground">Last 30 Days</span>
-                    <span className="font-semibold text-foreground">
-                      ${customerData.paymentDashboard.totalPaidLast30Days.toLocaleString()}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-muted-foreground">Unsettled</span>
-                    <span className="font-semibold text-foreground">
-                      {customerData.paymentDashboard.unsettledCompletedChores.length} chores
-                    </span>
-                  </div>
-                </div>
-              </div>
-            )}
 
             {/* Quick Stats Card */}
             <div className="rounded-2xl border border-border/50 bg-gradient-to-br from-highlight/5 to-accent/5 p-5 backdrop-blur-sm">
@@ -680,42 +582,6 @@ export default function DashboardClientV2({ user, role, data }: DashboardClientV
           </section>
         )}
 
-        {/* Payment Export Section */}
-        {customerData.paymentDashboard && (
-          <section>
-            <SectionHeader
-              title="Export Payments"
-              subtitle="Download your payment history"
-            />
-            <Card className="p-6">
-              <div className="grid gap-4 sm:grid-cols-3">
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-muted-foreground">From Date</label>
-                  <input
-                    type="date"
-                    value={reportFrom}
-                    onChange={(e) => setReportFrom(e.target.value)}
-                    className="block w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-muted-foreground">To Date</label>
-                  <input
-                    type="date"
-                    value={reportTo}
-                    onChange={(e) => setReportTo(e.target.value)}
-                    className="block w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                  />
-                </div>
-                <div className="flex items-end">
-                  <Button variant="secondary" size="sm" onClick={handleDownloadCSV} className="w-full">
-                    Download CSV
-                  </Button>
-                </div>
-              </div>
-            </Card>
-          </section>
-        )}
       </main>
     </div>
   )

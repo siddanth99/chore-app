@@ -23,24 +23,6 @@ export async function POST(request: NextRequest) {
       ? (role as UserRole)
       : 'CUSTOMER'
 
-    // Require phone verification if phone is provided
-    if (phone) {
-      const phoneVerification = await prisma.phoneVerification.findUnique({
-        where: { phone },
-      })
-
-      if (!phoneVerification || !phoneVerification.verified) {
-        return NextResponse.json(
-          { error: 'Phone number must be verified before signup. Please verify your phone number first.' },
-          { status: 400 }
-        )
-      }
-
-      // Optional: Delete phone verification record after successful signup
-      // Or keep it for audit purposes - uncomment the next line if you want to delete:
-      // await prisma.phoneVerification.delete({ where: { phone } })
-    }
-
     // Check if user already exists
     const existingUser = await prisma.user.findUnique({
       where: { email },

@@ -13,32 +13,6 @@ import { formatDate } from '@/lib/utils'
 import CustomerApplicationsPanel from '@/components/applications/CustomerApplicationsPanel'
 import { useToast } from '@/components/ui/toast'
 
-interface PaymentSummary {
-  totalFromCustomer: number
-  totalToWorker: number
-  agreedPrice: number | null
-  paymentStatus: 'NONE' | 'CUSTOMER_PARTIAL' | 'CUSTOMER_PAID' | 'SETTLED'
-}
-
-interface Payment {
-  id: string
-  amount: number
-  direction: string
-  method: string
-  notes: string | null
-  createdAt: string
-  fromUser: {
-    id: string
-    name: string | null
-    email: string | null
-  }
-  toUser: {
-    id: string
-    name: string | null
-    email: string | null
-  }
-}
-
 interface ChoreDetailClientProps {
   chore: any
   currentUser: any
@@ -46,8 +20,6 @@ interface ChoreDetailClientProps {
   hasRated?: boolean
   assignedWorkerRating?: { average: number; count: number } | null
   latestCancellationRequest?: any | null
-  payments?: Payment[] | null
-  paymentSummary?: PaymentSummary | null
 }
 
 export default function ChoreDetailClient({
@@ -57,8 +29,6 @@ export default function ChoreDetailClient({
   hasRated: initialHasRated = false,
   assignedWorkerRating = null,
   latestCancellationRequest: initialLatestCancellationRequest = null,
-  payments: initialPayments = null,
-  paymentSummary: initialPaymentSummary = null,
 }: ChoreDetailClientProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -104,28 +74,10 @@ export default function ChoreDetailClient({
   const [choreRating, setChoreRating] = useState<any>(null)
   const [loadingRatings, setLoadingRatings] = useState(false)
 
-  // Payment form state
-  const [payAmount, setPayAmount] = useState('')
-  const [payDirection, setPayDirection] = useState<'CUSTOMER_TO_OWNER' | 'OWNER_TO_WORKER'>(
-    'CUSTOMER_TO_OWNER'
-  )
-  const [payMethod, setPayMethod] = useState<'CASH' | 'UPI' | 'BANK_TRANSFER' | 'CARD' | 'OTHER'>(
-    'CASH'
-  )
-  const [payNotes, setPayNotes] = useState('')
-  const [paySubmitting, setPaySubmitting] = useState(false)
-  const [payError, setPayError] = useState('')
-
   const isOwner =
     currentUser && currentUser.role === 'CUSTOMER' && chore.createdById === currentUser.id
   const isWorker = currentUser && currentUser.role === 'WORKER'
   const isAssignedWorker = currentUser && chore.assignedWorkerId === currentUser.id
-  const canViewPayments = isOwner || isAssignedWorker
-  const canAddPayments =
-    isOwner &&
-    (choreStatus === 'ASSIGNED' ||
-      choreStatus === 'IN_PROGRESS' ||
-      choreStatus === 'COMPLETED')
 
   // Find worker's application if they're a worker
   const workerApplication = isWorker
@@ -332,50 +284,6 @@ export default function ChoreDetailClient({
       setError('An error occurred. Please try again.')
     } finally {
       setLoading(false)
-    }
-  }
-
-  const handleAddPayment = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setPayError('')
-    setPaySubmitting(true)
-
-    try {
-      const amountNumber = parseFloat(payAmount)
-      if (!amountNumber || amountNumber <= 0) {
-        setPayError('Enter a valid amount')
-        setPaySubmitting(false)
-        return
-      }
-
-      const res = await fetch(`/api/chores/${chore.id}/payments`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          amount: amountNumber,
-          direction: payDirection,
-          method: payMethod,
-          notes: payNotes || undefined,
-        }),
-      })
-
-      const data = await res.json()
-      if (!res.ok) {
-        setPayError(data.error || 'Failed to record payment')
-        setPaySubmitting(false)
-        return
-      }
-
-      // Clear form
-      setPayAmount('')
-      setPayNotes('')
-
-      // Refresh payments from server
-      router.refresh()
-    } catch (err) {
-      setPayError('An error occurred while recording payment')
-    } finally {
-      setPaySubmitting(false)
     }
   }
 
@@ -1218,217 +1126,6 @@ export default function ChoreDetailClient({
               </p>
             </Card>
           )}
-
-        {/* Payments & Earnings Section */}
-        {canViewPayments && initialPaymentSummary && (
-          <Card className="mb-6">
-            {/* Header */}
-            <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
-              <div>
-                <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-50">
-                  Payments & Earnings
-                </h2>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Internal record of payments related to this chore.
-                </p>
-              </div>
-
-              {/* Payment status badge */}
-              <Badge
-                variant={
-                  initialPaymentSummary.paymentStatus === 'NONE'
-                    ? 'statusDraft'
-                    : initialPaymentSummary.paymentStatus === 'CUSTOMER_PARTIAL'
-                    ? 'statusInProgress'
-                    : initialPaymentSummary.paymentStatus === 'CUSTOMER_PAID'
-                    ? 'statusPublished'
-                    : 'statusCompleted'
-                }
-              >
-                {initialPaymentSummary.paymentStatus.replace('_', ' ')}
-              </Badge>
-            </div>
-
-            {/* Summary row */}
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3 text-sm">
-              <div>
-                <p className="text-slate-500 dark:text-slate-400">Agreed Price</p>
-                <p className="text-base font-semibold text-slate-900 dark:text-slate-50">
-                  {initialPaymentSummary.agreedPrice != null
-                    ? `$${initialPaymentSummary.agreedPrice}`
-                    : 'Not set'}
-                </p>
-              </div>
-              <div>
-                <p className="text-slate-500 dark:text-slate-400">From Customer</p>
-                <p className="text-base font-semibold text-slate-900 dark:text-slate-50">
-                  ${initialPaymentSummary.totalFromCustomer}
-                  {initialPaymentSummary.agreedPrice
-                    ? ` / $${initialPaymentSummary.agreedPrice}`
-                    : ''}
-                </p>
-              </div>
-              <div>
-                <p className="text-slate-500 dark:text-slate-400">To Worker</p>
-                <p className="text-base font-semibold text-slate-900 dark:text-slate-50">
-                  ${initialPaymentSummary.totalToWorker}
-                </p>
-              </div>
-            </div>
-
-            {/* Add Payment Form */}
-            {canAddPayments && (
-              <div className="mt-6 border-t border-slate-200 pt-6 dark:border-slate-700">
-                <h3 className="mb-3 text-sm font-semibold text-slate-800 dark:text-slate-100">
-                  Add Internal Payment
-                </h3>
-                {payError && (
-                  <div className="mb-3 rounded-md bg-red-50 px-3 py-2 text-xs text-red-700 dark:bg-red-900/20 dark:text-red-300">
-                    {payError}
-                  </div>
-                )}
-
-                <form onSubmit={handleAddPayment} className="grid gap-3 md:grid-cols-4">
-                  {/* Amount */}
-                  <div className="md:col-span-1">
-                    <label className="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-300">
-                      Amount
-                    </label>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={payAmount}
-                      onChange={(e) => setPayAmount(e.target.value)}
-                      className="block w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
-                      required
-                    />
-                  </div>
-
-                  {/* Direction */}
-                  <div className="md:col-span-1">
-                    <label className="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-300">
-                      Direction
-                    </label>
-                    <select
-                      value={payDirection}
-                      onChange={(e) =>
-                        setPayDirection(
-                          e.target.value as 'CUSTOMER_TO_OWNER' | 'OWNER_TO_WORKER'
-                        )
-                      }
-                      className="block w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
-                    >
-                      <option value="CUSTOMER_TO_OWNER">Customer → Owner</option>
-                      <option value="OWNER_TO_WORKER">Owner → Worker</option>
-                    </select>
-                  </div>
-
-                  {/* Method */}
-                  <div className="md:col-span-1">
-                    <label className="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-300">
-                      Method
-                    </label>
-                    <select
-                      value={payMethod}
-                      onChange={(e) =>
-                        setPayMethod(
-                          e.target.value as 'CASH' | 'UPI' | 'BANK_TRANSFER' | 'CARD' | 'OTHER'
-                        )
-                      }
-                      className="block w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
-                    >
-                      <option value="CASH">Cash</option>
-                      <option value="UPI">UPI</option>
-                      <option value="BANK_TRANSFER">Bank Transfer</option>
-                      <option value="CARD">Card</option>
-                      <option value="OTHER">Other</option>
-                    </select>
-                  </div>
-
-                  {/* Notes + Submit */}
-                  <div className="md:col-span-1 flex flex-col gap-2">
-                    <div>
-                      <label className="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-300">
-                        Notes (optional)
-                      </label>
-                      <input
-                        type="text"
-                        value={payNotes}
-                        onChange={(e) => setPayNotes(e.target.value)}
-                        className="block w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
-                        placeholder="e.g. Advance, balance, cash at site"
-                      />
-                    </div>
-                    <button
-                      type="submit"
-                      disabled={paySubmitting}
-                      className="inline-flex items-center justify-center rounded-md bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-blue-500 disabled:opacity-50"
-                    >
-                      {paySubmitting ? 'Saving…' : 'Record Payment'}
-                    </button>
-                  </div>
-                </form>
-              </div>
-            )}
-
-            {/* Payment list */}
-            <div className="mt-6">
-              <h3 className="mb-2 text-sm font-medium text-slate-800 dark:text-slate-100">
-                Payment History
-              </h3>
-
-              {(!initialPayments || initialPayments.length === 0) ? (
-                <p className="text-sm text-slate-500 dark:text-slate-400">
-                  No payments recorded yet for this chore.
-                </p>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="min-w-full text-left text-sm">
-                    <thead className="border-b border-slate-200 dark:border-slate-700 text-xs uppercase text-slate-500 dark:text-slate-400">
-                      <tr>
-                        <th className="py-2 pr-4">Date</th>
-                        <th className="py-2 pr-4">From</th>
-                        <th className="py-2 pr-4">To</th>
-                        <th className="py-2 pr-4">Amount</th>
-                        <th className="py-2 pr-4">Direction</th>
-                        <th className="py-2 pr-4">Method</th>
-                        <th className="py-2 pr-4">Notes</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                      {initialPayments.map((p) => (
-                        <tr key={p.id}>
-                          <td className="py-2 pr-4 text-slate-700 dark:text-slate-300">
-                            {new Date(p.createdAt).toLocaleString()}
-                          </td>
-                          <td className="py-2 pr-4 text-slate-700 dark:text-slate-300">
-                            {p.fromUser?.name || p.fromUser?.email || 'Unknown'}
-                          </td>
-                          <td className="py-2 pr-4 text-slate-700 dark:text-slate-300">
-                            {p.toUser?.name || p.toUser?.email || 'Unknown'}
-                          </td>
-                          <td className="py-2 pr-4 text-slate-900 dark:text-slate-50 font-semibold">
-                            ${p.amount}
-                          </td>
-                          <td className="py-2 pr-4 text-slate-700 dark:text-slate-300">
-                            {p.direction.replace(/_/g, ' → ')}
-                          </td>
-                          <td className="py-2 pr-4 text-slate-700 dark:text-slate-300">
-                            {p.method.replace(/_/g, ' ')}
-                          </td>
-                          <td className="py-2 pr-4 text-slate-500 dark:text-slate-400">
-                            {p.notes || '—'}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          </Card>
-        )}
 
         {/* Chat - Only visible when assigned and status allows */}
         {currentUser &&
