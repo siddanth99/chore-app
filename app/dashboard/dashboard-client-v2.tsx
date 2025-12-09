@@ -44,6 +44,8 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { WorkerDashboardData, CustomerDashboardData } from '@/server/api/dashboard'
+import { useSession } from 'next-auth/react'
+import { UserRole } from '@prisma/client'
 
 // New Lovable UI Components
 import { StatCard } from '@/components/dashboard/StatCard'
@@ -64,7 +66,7 @@ import { cn } from '@/lib/utils'
 // -----------------------------------------------------------------------------
 interface DashboardClientV2Props {
   user: any
-  role: 'WORKER' | 'CUSTOMER'
+  role: UserRole
   data: WorkerDashboardData | CustomerDashboardData
 }
 
@@ -142,7 +144,11 @@ const Icons = {
 // -----------------------------------------------------------------------------
 export default function DashboardClientV2({ user, role, data }: DashboardClientV2Props) {
   const router = useRouter()
-
+  const { data: session, update } = useSession()
+  const [isUpdatingRole, setIsUpdatingRole] = useState(false)
+  
+  // Store role in a variable that preserves the union type for toggle buttons
+  const currentRole: UserRole = role
 
   // TODO: Fetch notifications from API or pass via props
   // For now, using placeholder data
@@ -150,10 +156,40 @@ export default function DashboardClientV2({ user, role, data }: DashboardClientV
     { id: '1', title: 'System Update', message: 'New features available', time: 'Just now', type: 'system' as const },
   ]
 
+  const handleRoleToggle = async (newRole: UserRole) => {
+    if (newRole === currentRole || isUpdatingRole) return
+
+    setIsUpdatingRole(true)
+    try {
+      const response = await fetch('/api/profile/role', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ role: newRole }),
+      })
+
+      if (!response.ok) {
+        const data = await response.json()
+        console.error('Failed to update role:', data.error)
+        return
+      }
+
+      // Update the session to reflect the new role
+      await update()
+      // Refresh the page to load the correct dashboard data
+      router.refresh()
+    } catch (error) {
+      console.error('Error updating role:', error)
+    } finally {
+      setIsUpdatingRole(false)
+    }
+  }
+
   // -------------------------------------------------------------------------
   // WORKER Dashboard
   // -------------------------------------------------------------------------
-  if (role === 'WORKER') {
+  if (role === UserRole.WORKER) {
     const workerData = data as WorkerDashboardData
     const { stats, assignedChores, inProgressChores, completedChores, cancelledChores } = workerData
 
@@ -180,10 +216,33 @@ export default function DashboardClientV2({ user, role, data }: DashboardClientV
                   Here's your worker dashboard overview.
                 </p>
               </div>
-              <div className="flex items-center gap-2">
-                <span className="px-3 py-1 rounded-full text-sm font-medium bg-accent/10 text-accent">
-                  Worker
-                </span>
+              <div className="flex items-center gap-3">
+                {/* Role Toggle */}
+                <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-border bg-card">
+                  <button
+                    onClick={() => handleRoleToggle(UserRole.CUSTOMER)}
+                    disabled={isUpdatingRole}
+                    className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
+                      currentRole === UserRole.CUSTOMER
+                        ? 'bg-primary text-primary-foreground'
+                        : 'text-muted-foreground hover:text-foreground'
+                    } ${isUpdatingRole ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  >
+                    Customer
+                  </button>
+                  <div className="h-4 w-px bg-border" />
+                  <button
+                    onClick={() => handleRoleToggle(UserRole.WORKER)}
+                    disabled={isUpdatingRole}
+                    className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
+                      currentRole === UserRole.WORKER
+                        ? 'bg-primary text-primary-foreground'
+                        : 'text-muted-foreground hover:text-foreground'
+                    } ${isUpdatingRole ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  >
+                    Worker
+                  </button>
+                </div>
                 <LogoutButton />
               </div>
             </div>
@@ -371,10 +430,33 @@ export default function DashboardClientV2({ user, role, data }: DashboardClientV
                 Here's what's happening with your chores today.
               </p>
             </div>
-            <div className="flex items-center gap-2">
-              <span className="px-3 py-1 rounded-full text-sm font-medium bg-primary/10 text-primary">
-                Customer
-              </span>
+            <div className="flex items-center gap-3">
+              {/* Role Toggle */}
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-border bg-card">
+                <button
+                  onClick={() => handleRoleToggle(UserRole.CUSTOMER)}
+                  disabled={isUpdatingRole}
+                  className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
+                    currentRole === UserRole.CUSTOMER
+                      ? 'bg-primary text-primary-foreground'
+                      : 'text-muted-foreground hover:text-foreground'
+                  } ${isUpdatingRole ? 'opacity-50 cursor-not-allowed' : ''}`}
+                >
+                  Customer
+                </button>
+                <div className="h-4 w-px bg-border" />
+                <button
+                  onClick={() => handleRoleToggle(UserRole.WORKER)}
+                  disabled={isUpdatingRole}
+                  className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
+                    currentRole === UserRole.WORKER
+                      ? 'bg-primary text-primary-foreground'
+                      : 'text-muted-foreground hover:text-foreground'
+                  } ${isUpdatingRole ? 'opacity-50 cursor-not-allowed' : ''}`}
+                >
+                  Worker
+                </button>
+              </div>
               <LogoutButton />
             </div>
           </div>

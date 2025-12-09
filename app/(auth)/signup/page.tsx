@@ -25,10 +25,7 @@ import {
   MapPin, 
   Sparkles,
   ArrowRight,
-  Briefcase,
-  Home,
-  ChevronDown,
-  Check
+  ChevronDown
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import ThemeToggle from '@/components/theme/ThemeToggle';
@@ -49,12 +46,6 @@ const COUNTRY_CODES = [
   { code: '+81', country: 'JP', flag: '🇯🇵' },
 ];
 
-// User type options
-const USER_TYPES = [
-  { id: 'customer', label: 'Post chores', icon: Home, description: 'I need help with tasks' },
-  { id: 'worker', label: 'Find work', icon: Briefcase, description: 'I want to earn money' },
-];
-
 function SignUpPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -67,7 +58,6 @@ function SignUpPageContent() {
   });
   const [countryCode, setCountryCode] = useState(COUNTRY_CODES[0]);
   const [showCountryDropdown, setShowCountryDropdown] = useState(false);
-  const [userType, setUserType] = useState<'customer' | 'worker'>('customer');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -112,7 +102,6 @@ function SignUpPageContent() {
           email: formData.email,
           password: formData.password,
           phone: fullPhone,
-          role: userType.toUpperCase(), // Convert 'customer'/'worker' to 'CUSTOMER'/'WORKER'
         }),
       });
 
@@ -322,52 +311,6 @@ function SignUpPageContent() {
               <p className="text-muted-foreground text-sm">
                 Join the chore marketplace – post tasks or find work near you
               </p>
-            </div>
-
-            {/* User Type Toggle */}
-            <div className="mb-6">
-              <label className="block text-sm font-medium text-foreground mb-3">
-                I want to
-              </label>
-              <div className="grid grid-cols-2 gap-3">
-                {USER_TYPES.map((type) => (
-                  <motion.button
-                    key={type.id}
-                    type="button"
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={() => setUserType(type.id as 'customer' | 'worker')}
-                    className={`relative p-4 rounded-xl border-2 transition-all text-left ${
-                      userType === type.id
-                        ? 'border-primary bg-primary/5 shadow-sm'
-                        : 'border-border bg-secondary/30 hover:border-border/80'
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                        userType === type.id
-                          ? 'bg-primary text-primary-foreground'
-                          : 'bg-muted text-muted-foreground'
-                      }`}>
-                        <type.icon className="w-5 h-5" />
-                      </div>
-                      <div>
-                        <div className="font-medium text-foreground">{type.label}</div>
-                        <div className="text-xs text-muted-foreground">{type.description}</div>
-                      </div>
-                    </div>
-                    {userType === type.id && (
-                      <motion.div
-                        initial={{ scale: 0 }}
-                        animate={{ scale: 1 }}
-                        className="absolute top-2 right-2 w-5 h-5 rounded-full bg-primary flex items-center justify-center"
-                      >
-                        <Check className="w-3 h-3 text-primary-foreground" />
-                      </motion.div>
-                    )}
-                  </motion.button>
-                ))}
-              </div>
             </div>
 
             {/* Error Message */}

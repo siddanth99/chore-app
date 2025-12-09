@@ -2,7 +2,10 @@
 // See dashboard-client-v2.tsx for the new Lovable UI implementation.
 'use client'
 
+import { useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
+import { useSession } from 'next-auth/react'
 import { WorkerDashboardData, CustomerDashboardData } from '@/server/api/dashboard'
 import DashboardStatCard from '@/components/dashboard/DashboardStatCard'
 import DashboardSection from '@/components/dashboard/DashboardSection'
@@ -17,6 +20,42 @@ interface DashboardClientProps {
 }
 
 export default function DashboardClient({ user, role, data }: DashboardClientProps) {
+  const router = useRouter()
+  const { update } = useSession()
+  const [isUpdatingRole, setIsUpdatingRole] = useState(false)
+  
+  // Store role in a variable that preserves the union type for toggle buttons
+  const currentRole = role
+
+  const handleRoleToggle = async (newRole: 'CUSTOMER' | 'WORKER') => {
+    if (newRole === currentRole || isUpdatingRole) return
+
+    setIsUpdatingRole(true)
+    try {
+      const response = await fetch('/api/profile/role', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ role: newRole }),
+      })
+
+      if (!response.ok) {
+        const data = await response.json()
+        console.error('Failed to update role:', data.error)
+        return
+      }
+
+      // Update the session to reflect the new role
+      await update()
+      // Refresh the page to load the correct dashboard data
+      router.refresh()
+    } catch (error) {
+      console.error('Error updating role:', error)
+    } finally {
+      setIsUpdatingRole(false)
+    }
+  }
 
   if (role === 'WORKER') {
     const workerData = data as WorkerDashboardData
@@ -30,7 +69,35 @@ export default function DashboardClient({ user, role, data }: DashboardClientPro
               <h1 className="text-3xl font-bold text-slate-900 dark:text-slate-50">Dashboard</h1>
               <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Worker Overview</p>
             </div>
-            <LogoutButton />
+            <div className="flex items-center gap-3">
+              {/* Role Toggle */}
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900">
+                <button
+                  onClick={() => handleRoleToggle('CUSTOMER')}
+                  disabled={isUpdatingRole}
+                  className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
+                    currentRole === 'CUSTOMER'
+                      ? 'bg-blue-600 text-white'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
+                  } ${isUpdatingRole ? 'opacity-50 cursor-not-allowed' : ''}`}
+                >
+                  Customer
+                </button>
+                <div className="h-4 w-px bg-slate-300 dark:bg-slate-700" />
+                <button
+                  onClick={() => handleRoleToggle('WORKER')}
+                  disabled={isUpdatingRole}
+                  className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
+                    currentRole === 'WORKER'
+                      ? 'bg-blue-600 text-white'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
+                  } ${isUpdatingRole ? 'opacity-50 cursor-not-allowed' : ''}`}
+                >
+                  Worker
+                </button>
+              </div>
+              <LogoutButton />
+            </div>
           </div>
 
           {/* Stats Cards */}
@@ -134,12 +201,38 @@ export default function DashboardClient({ user, role, data }: DashboardClientPro
             <h1 className="text-3xl font-bold text-slate-900 dark:text-slate-50">Dashboard</h1>
             <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Customer Overview</p>
           </div>
-          <div className="flex gap-4">
+          <div className="flex items-center gap-3">
             <Link href="/chores/new">
               <Button variant="primary" size="sm">
                 Create New Chore
               </Button>
             </Link>
+            {/* Role Toggle */}
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900">
+              <button
+                onClick={() => handleRoleToggle('CUSTOMER')}
+                disabled={isUpdatingRole}
+                className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
+                  currentRole === 'CUSTOMER'
+                    ? 'bg-blue-600 text-white'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
+                } ${isUpdatingRole ? 'opacity-50 cursor-not-allowed' : ''}`}
+              >
+                Customer
+              </button>
+              <div className="h-4 w-px bg-slate-300 dark:bg-slate-700" />
+              <button
+                onClick={() => handleRoleToggle('WORKER')}
+                disabled={isUpdatingRole}
+                className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
+                  currentRole === 'WORKER'
+                    ? 'bg-blue-600 text-white'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
+                } ${isUpdatingRole ? 'opacity-50 cursor-not-allowed' : ''}`}
+              >
+                Worker
+              </button>
+            </div>
             <LogoutButton />
           </div>
         </div>
