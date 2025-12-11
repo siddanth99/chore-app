@@ -385,7 +385,7 @@ export function BudgetInput({
         Budget (optional)
       </Label>
       <div className="relative">
-        <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground font-medium">₹</span>
         <Input
           id="budget"
           type="number"

@@ -221,7 +221,7 @@ const tileUrl = useMemo(() => (isDark ? darkUrl : lightUrl), [isDark])
   // Wrapper classes
   const wrapper = (className && className.trim())
     ? className
-    : 'w-full h-full min-h-[350px] md:min-h-[420px] relative z-10 rounded-2xl overflow-hidden shadow-lg animate-fade-in'
+    : 'w-full h-full min-h-[350px] md:min-h-[420px] relative z-0 rounded-2xl overflow-hidden shadow-lg animate-fade-in'
 
   return (
     <div className={wrapper}>

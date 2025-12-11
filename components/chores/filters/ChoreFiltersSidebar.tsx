@@ -318,8 +318,8 @@ export function ChoreFiltersSidebar({
           </div>
         </div>
         <div className="flex items-center justify-between text-sm text-muted-foreground" role="status" aria-live="polite">
-          <span aria-label="Minimum budget value">${localFilters.minBudget ?? 0}</span>
-          <span aria-label="Maximum budget value">${localFilters.maxBudget ?? 10000}</span>
+          <span aria-label="Minimum budget value">₹{localFilters.minBudget ?? 0}</span>
+          <span aria-label="Maximum budget value">₹{localFilters.maxBudget ?? 10000}</span>
         </div>
       </div>
 

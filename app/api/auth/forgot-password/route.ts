@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/server/db/client'
-import { sendExternalNotification } from '@/server/notifications/external'
 import { randomBytes } from 'crypto'
+import { Resend } from 'resend'
 
 export async function POST(request: NextRequest) {
   try {
@@ -16,18 +16,21 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    const normalizedEmail = email.toLowerCase().trim()
+
     // Check if user exists
     const user = await prisma.user.findUnique({
-      where: { email: email.toLowerCase().trim() },
+      where: { email: normalizedEmail },
       select: { id: true, email: true, name: true },
     })
 
-    // Always return success to prevent email enumeration
-    // But only send email if user exists and has a password (not OAuth-only)
+    // Always respond 200 to prevent email enumeration
     if (!user) {
-      // Return success but don't send email
       return NextResponse.json(
-        { message: 'If an account exists with this email, you will receive a password reset link.' },
+        {
+          message:
+            'If an account exists with this email, you will receive a password reset link.',
+        },
         { status: 200 }
       )
     }
@@ -39,26 +42,28 @@ export async function POST(request: NextRequest) {
     })
 
     if (!userWithPassword?.hashedPassword) {
-      // User signed up with OAuth only, can't reset password
       return NextResponse.json(
-        { message: 'If an account exists with this email, you will receive a password reset link.' },
+        {
+          message:
+            'If an account exists with this email, you will receive a password reset link.',
+        },
         { status: 200 }
       )
     }
 
     // Generate secure token
     const token = randomBytes(32).toString('hex')
-    
-    // Set expiration to 1 hour from now
+
+    // Expiration (1 hour)
     const expires = new Date()
     expires.setHours(expires.getHours() + 1)
 
-    // Delete any existing reset tokens for this email
+    // Remove existing tokens for this user
     await prisma.passwordResetToken.deleteMany({
       where: { email: user.email },
     })
 
-    // Create new reset token
+    // Create new token
     await prisma.passwordResetToken.create({
       data: {
         email: user.email,
@@ -67,30 +72,57 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    // Generate reset URL
-    const baseUrl = process.env.NEXTAUTH_URL || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+    // Determine base URL
+    const baseUrl =
+      process.env.NEXTAUTH_URL ||
+      process.env.NEXT_PUBLIC_APP_URL ||
+      'http://localhost:3000'
+
     const resetUrl = `${baseUrl}/reset-password?token=${token}`
 
-    // Send email via Pabbly webhook (or Resend/Nodemailer if configured)
-    // For now, we'll use the existing notification system
+    const resend = new Resend(process.env.RESEND_API_KEY!)
+
+await resend.emails.send({
+  from: "Chore App <onboarding@resend.dev>", // TEMP sender
+  to: user.email,
+  subject: "Reset your password",
+  html: `<p>Reset link: <a href="${resetUrl}">${resetUrl}</a></p>`,
+})
+
+    // ---- SEND EMAIL USING RESEND ----
     try {
-      await sendExternalNotification({
-        userId: user.id,
-        email: user.email,
-        channel: 'email',
-        event: 'password.reset',
-        title: 'Reset your password',
-        message: `Click the link below to reset your password. This link will expire in 1 hour.\n\n${resetUrl}\n\nIf you didn't request this, please ignore this email.`,
-        link: resetUrl,
-        meta: { token, expires: expires.toISOString() },
+      const resend = new Resend(process.env.RESEND_API_KEY!)
+
+      await resend.emails.send({
+        from: 'Chore App <no-reply@choreapp.com>',
+        to: user.email,
+        subject: 'Reset your password',
+        html: `
+          <p>Hello${user.name ? ` ${user.name}` : ''},</p>
+
+          <p>You recently requested to reset your password for your Chore App account.</p>
+
+          <p>Click the link below to reset it (expires in 1 hour):</p>
+
+          <p><a href="${resetUrl}" target="_blank" style="font-size:16px;color:#2563eb;">
+            Reset Password
+          </a></p>
+
+          <p>If you did not request this, you can safely ignore this email.</p>
+
+          <p>– Chore App Team</p>
+        `,
       })
     } catch (emailError) {
-      console.error('Failed to send password reset email:', emailError)
-      // Still return success to user, but log the error
+      console.error('Failed to send password reset email via Resend:', emailError)
+      // We still return success to avoid exposing system info
     }
 
     return NextResponse.json(
-      { message: 'If an account exists with this email, you will receive a password reset link.' },
+      {
+        message:
+          'If an account exists with this email, you will receive a password reset link.',
+      },
       { status: 200 }
     )
   } catch (error) {
@@ -101,4 +133,3 @@ export async function POST(request: NextRequest) {
     )
   }
 }
-

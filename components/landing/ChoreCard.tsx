@@ -82,7 +82,7 @@ export function ChoreCard({
           </div>
           {/* Budget */}
           {budget != null && (
-            <span className="text-lg font-bold text-primary">${budget}</span>
+            <span className="text-lg font-bold text-primary">₹{budget}</span>
           )}
         </div>
       </article>

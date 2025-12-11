@@ -70,7 +70,7 @@ export function BrowseChoresClient(props: BrowseChoresClientProps) {
           ? chore.category.toLowerCase()
           : chore.category?.id || chore.category?.label || 'uncategorized',
       budget: chore.budget,
-      currency: '$',
+      currency: '₹',
       type: chore.type === 'ONLINE' ? 'online' : 'offline',
       status: mapStatus(chore.status),
       location: chore.locationAddress || undefined,

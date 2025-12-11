@@ -45,7 +45,7 @@ export function FiltersChipsBar({ filters, onRemove, onClearAll }: FiltersChipsB
   if (filters.minBudget || filters.maxBudget) {
     const min = filters.minBudget || 0;
     const max = filters.maxBudget || 500;
-    activeFilters.push({ key: 'minBudget', label: `$${min} - $${max}` });
+    activeFilters.push({ key: 'minBudget', label: `₹${min} - ₹${max}` });
   }
 
   // Status

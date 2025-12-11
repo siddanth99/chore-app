@@ -118,7 +118,7 @@ export default function DashboardClient({ user, role, data }: DashboardClientPro
             <DashboardStatCard
               icon="💰"
               label="Total Earnings"
-              value={`$${stats.totalEarnings.toLocaleString()}`}
+              value={`₹${stats.totalEarnings.toLocaleString()}`}
               subtitle="All time"
             />
             <DashboardStatCard

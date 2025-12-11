@@ -543,7 +543,7 @@ function SignUpPageContent() {
                 whileHover={{ scale: 1.02, y: -1 }}
                 whileTap={{ scale: 0.98 }}
                 type="button"
-                onClick={() => handleSocialSignUp('Google')}
+                onClick={() => signIn('google')}
                 className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-secondary/50 border border-border text-foreground hover:bg-secondary transition-all"
               >
                 <svg className="w-5 h-5" viewBox="0 0 24 24">

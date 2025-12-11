@@ -21,7 +21,6 @@ import {
   ArrowRight
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import ThemeToggle from '@/components/theme/ThemeToggle';
 
 // Feature badges for hero section
 const FEATURE_BADGES = [
@@ -212,17 +211,10 @@ function SignInPageContent() {
           </motion.div>
         </div>
 
-        <div className="absolute top-4 right-4 lg:hidden">
-          <ThemeToggle />
-        </div>
       </motion.div>
 
       {/* Right Form Panel */}
       <div className="flex-1 flex items-center justify-center p-6 lg:p-12 relative">
-
-        <div className="absolute top-6 right-6 hidden lg:block">
-          <ThemeToggle />
-        </div>
 
         <motion.div
           initial={{ opacity: 0, y: 30 }}

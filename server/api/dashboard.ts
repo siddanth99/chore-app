@@ -15,6 +15,7 @@ export interface WorkerDashboardData {
   completedChores: any[]
   cancelledChores: any[]
   paymentDashboard: null
+  isFirstLogin: boolean
 }
 
 export interface CustomerDashboardData {
@@ -30,6 +31,7 @@ export interface CustomerDashboardData {
   completedChores: any[]
   cancelledChores: any[]
   paymentDashboard: null
+  isFirstLogin: boolean
 }
 
 /**
@@ -247,6 +249,24 @@ export async function getWorkerDashboardData(workerId: string): Promise<WorkerDa
     return true
   })
 
+  // Determine if first login: user has no chores created and no applications submitted
+  const user = await prisma.user.findUnique({
+    where: { id: workerId },
+    select: {
+      createdAt: true,
+      updatedAt: true,
+      createdChores: { select: { id: true }, take: 1 },
+      applications: { select: { id: true }, take: 1 },
+    },
+  })
+
+  const isFirstLogin = 
+    (!user?.createdChores || user.createdChores.length === 0) &&
+    (!user?.applications || user.applications.length === 0) &&
+    assignedChoresFiltered.length === 0 &&
+    inProgressChoresFiltered.length === 0 &&
+    completedChores.length === 0
+
   return {
     stats: {
       averageRating: ratingStats.average || 0,
@@ -260,6 +280,7 @@ export async function getWorkerDashboardData(workerId: string): Promise<WorkerDa
     completedChores,
     cancelledChores,
     paymentDashboard: null,
+    isFirstLogin,
   }
 }
 
@@ -466,6 +487,9 @@ export async function getCustomerDashboardData(
       return sum + (chore.budget || 0)
     }, 0)
 
+  // Determine if first login: user has no chores created yet
+  const isFirstLogin = totalPosted === 0
+
   return {
     stats: {
       totalPosted,
@@ -479,6 +503,7 @@ export async function getCustomerDashboardData(
     completedChores,
     cancelledChores,
     paymentDashboard: null,
+    isFirstLogin,
   }
 }
 

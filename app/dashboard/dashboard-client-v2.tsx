@@ -211,7 +211,7 @@ export default function DashboardClientV2({ user, role, data }: DashboardClientV
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
               <div>
                 <h1 className="text-3xl sm:text-4xl font-bold text-foreground">
-                  Welcome back, {user?.name?.split(' ')[0] || 'Worker'}! 👋
+                  {(data as any).isFirstLogin ? 'Welcome' : 'Welcome back'}, {user?.name?.split(' ')[0] || 'Worker'}! 👋
                 </h1>
                 <p className="text-muted-foreground mt-1">
                   Here's your worker dashboard overview.
@@ -265,7 +265,7 @@ export default function DashboardClientV2({ user, role, data }: DashboardClientV
               />
               <StatCard
                 title="Total Earnings"
-                value={`$${stats.totalEarnings.toLocaleString()}`}
+                value={`₹${stats.totalEarnings.toLocaleString()}`}
                 icon={Icons.dollar}
                 variant="accent"
               />
@@ -315,7 +315,7 @@ export default function DashboardClientV2({ user, role, data }: DashboardClientV
                         assignedBy={chore.createdBy?.name || 'Customer'}
                         progress={chore.status === 'IN_PROGRESS' ? 50 : 25}
                         dueDate={chore.dueAt ? formatRelativeTime(chore.dueAt) : 'No deadline'}
-                        budget={`$${chore.budget || 0}`}
+                        budget={`₹${chore.budget || 0}`}
                         isWorkerView={true}
                         onChat={() => router.push(`/chores/${chore.id}?from=dashboard`)}
                         onMarkComplete={() => router.push(`/chores/${chore.id}?from=dashboard`)}
@@ -347,7 +347,7 @@ export default function DashboardClientV2({ user, role, data }: DashboardClientV
                         category={chore.category || 'General'}
                         status="completed"
                         applicationsCount={chore._count?.applications || 0}
-                        budget={`$${chore.budget || 0}`}
+                        budget={`₹${chore.budget || 0}`}
                         createdAt={formatRelativeTime(chore.createdAt)}
                         onView={() => router.push(`/chores/${chore.id}?from=dashboard`)}
                       />
@@ -425,7 +425,7 @@ export default function DashboardClientV2({ user, role, data }: DashboardClientV
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
             <div>
               <h1 className="text-3xl sm:text-4xl font-bold text-foreground">
-                Welcome back, {user?.name?.split(' ')[0] || 'Customer'}! 👋
+                {customerData.isFirstLogin ? 'Welcome' : 'Welcome back'}, {user?.name?.split(' ')[0] || 'Customer'}! 👋
               </h1>
               <p className="text-muted-foreground mt-1">
                 Here's what's happening with your chores today.
@@ -478,7 +478,7 @@ export default function DashboardClientV2({ user, role, data }: DashboardClientV
             />
             <StatCard
               title="Total Spent"
-              value={`$${stats.totalSpent.toLocaleString()}`}
+              value={`₹${stats.totalSpent.toLocaleString()}`}
               icon={Icons.dollar}
               variant="highlight"
             />
@@ -531,7 +531,7 @@ export default function DashboardClientV2({ user, role, data }: DashboardClientV
                       category={chore.category || 'General'}
                       status="open"
                       applicationsCount={chore._count?.applications || 0}
-                      budget={`$${chore.budget || 0}`}
+                      budget={`₹${chore.budget || 0}`}
                       createdAt={formatRelativeTime(chore.createdAt)}
                       onView={() => router.push(`/chores/${chore.id}?from=dashboard`)}
                       onEdit={() => router.push(`/chores/${chore.id}/edit`)}
@@ -566,7 +566,7 @@ export default function DashboardClientV2({ user, role, data }: DashboardClientV
                       assignedTo={chore.assignedWorker?.name || 'Pending'}
                       progress={chore.status === 'IN_PROGRESS' ? 50 : 25}
                       dueDate={chore.dueAt ? formatRelativeTime(chore.dueAt) : 'No deadline'}
-                      budget={`$${chore.budget || 0}`}
+                      budget={`₹${chore.budget || 0}`}
                       isWorkerView={false}
                       onChat={() => router.push(`/chores/${chore.id}?from=dashboard`)}
                       onManage={() => router.push(`/chores/${chore.id}?from=dashboard`)}
@@ -595,7 +595,7 @@ export default function DashboardClientV2({ user, role, data }: DashboardClientV
                       category={chore.category || 'General'}
                       status="draft"
                       applicationsCount={0}
-                      budget={`$${chore.budget || 0}`}
+                      budget={`₹${chore.budget || 0}`}
                       createdAt={formatRelativeTime(chore.createdAt)}
                       onView={() => router.push(`/chores/${chore.id}?from=dashboard`)}
                       onEdit={() => router.push(`/chores/${chore.id}/edit`)}

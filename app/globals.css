@@ -571,3 +571,16 @@
   background-color: theme('colors.indigo.600');
   color: white;
 }
+
+/* Fix Leaflet map z-index so it doesn't overlay navbar/toasts */
+.leaflet-container,
+.leaflet-pane,
+.leaflet-map-pane,
+.leaflet-tile-pane,
+.leaflet-overlay-pane,
+.leaflet-shadow-pane,
+.leaflet-marker-pane,
+.leaflet-tooltip-pane,
+.leaflet-popup-pane {
+  z-index: 0 !important;
+}
