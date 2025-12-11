@@ -29,6 +29,7 @@ interface ChoreFiltersSidebarProps {
   isMobile?: boolean;
   viewMode?: 'grid' | 'list' | 'map';
   clearFilters?: () => void;
+  categories?: Array<{ id: string; label: string }>; // Optional: real categories from server
 }
 
 /**
@@ -42,6 +43,7 @@ export function ChoreFiltersSidebar({
   isMobile = false,
   viewMode,
   clearFilters,
+  categories: serverCategories,
 }: ChoreFiltersSidebarProps) {
   const [localFilters, setLocalFilters] = useState<Filters>(() => ({
     ...DEFAULT_FILTERS,
@@ -194,12 +196,21 @@ export function ChoreFiltersSidebar({
       <div className="space-y-3">
         <label className="text-sm font-medium text-muted-foreground">Categories</label>
         <div className="flex flex-wrap gap-2">
-          {CATEGORIES.map((category) => {
-            const isSelected = localFilters.categories?.includes(category.id);
+          {(serverCategories || CATEGORIES).map((category) => {
+            // Normalize: serverCategories has { id, label }, CATEGORIES has { id, label, icon }
+            const categoryId = typeof category === 'string' ? category : category.id;
+            const categoryLabel = typeof category === 'string' ? category : category.label;
+            const categoryIcon = 'icon' in category ? category.icon : '📋';
+            const isSelected = localFilters.categories?.includes(categoryId);
+            
+            // Try to match with CATEGORIES for icon if not provided
+            const matchedCategory = CATEGORIES.find(c => c.id === categoryId || c.label.toLowerCase() === categoryLabel.toLowerCase());
+            const displayIcon = matchedCategory?.icon || categoryIcon;
+            
             return (
               <motion.button
-                key={category.id}
-                onClick={() => toggleCategory(category.id)}
+                key={categoryId}
+                onClick={() => toggleCategory(categoryId)}
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
                 className={cn(
@@ -210,8 +221,8 @@ export function ChoreFiltersSidebar({
                 )}
                 aria-pressed={isSelected}
               >
-                <span className="mr-1.5">{category.icon}</span>
-                {category.label}
+                <span className="mr-1.5">{displayIcon}</span>
+                {categoryLabel}
               </motion.button>
             );
           })}

@@ -6,6 +6,7 @@ import {
   getChoresWithinDistance,
   getUniqueCategories,
 } from '@/server/api/chores'
+import { getCategoryNames } from '@/server/api/categories'
 import { BrowseChoresClient } from '@/components/chores/BrowseChoresClient'
 import { Filters } from '@/components/chores/types'
 
@@ -49,7 +50,15 @@ export default async function ChoresPage({
     serverFilters.location = resolved.location
   }
 
-  if (resolved.category) {
+  // Handle category filter - can be single category or array of categories
+  // For server-side filtering, we'll use the first category or handle array
+  if (resolved.categories) {
+    const cats = Array.isArray(resolved.categories) ? resolved.categories : [resolved.categories];
+    if (cats.length > 0) {
+      // Server filter uses first category for now (case-insensitive matching handles variations)
+      serverFilters.category = cats[0];
+    }
+  } else if (resolved.category) {
     serverFilters.category = resolved.category
   }
 
@@ -81,43 +90,39 @@ export default async function ChoresPage({
     distanceKm >= 0
 
   // Fetch chores and categories in parallel
-  const [chores, categoriesFromDb] = await Promise.all([
+  const [chores, categoryNames] = await Promise.all([
     isDistanceFilterActive
       ? getChoresWithinDistance(workerLat, workerLng, distanceKm, undefined)
       : listPublishedChoresWithFilters(serverFilters, undefined),
-    getUniqueCategories(),
+    getCategoryNames(), // Gets real categories + popular fallback
   ])
 
-  // Fetch categories from API (normalized with IDs)
-  let categories: Array<{ id: string; label: string }> = []
-  try {
-    const categoriesRes = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/api/categories`, {
-      cache: 'no-store',
-    })
-    if (categoriesRes.ok) {
-      const data = await categoriesRes.json()
-      if (data.ok && Array.isArray(data.categories)) {
-        categories = data.categories
-      }
-    }
-  } catch (e) {
-    // Fallback: derive from DB categories
-    categories = categoriesFromDb.map(cat => ({
-      id: cat.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, ''),
-      label: cat,
-    }))
-  }
+  // Transform category names to filter format (id/label pairs)
+  const categories: Array<{ id: string; label: string }> = categoryNames.map(cat => ({
+    id: cat.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, ''),
+    label: cat,
+  }))
 
   // Transform URL params to browse-v2 Filters format
+  // Handle both single category and categories array
+  let categoriesFilter: string[] | undefined = undefined;
+  if (resolved.categories) {
+    if (Array.isArray(resolved.categories)) {
+      categoriesFilter = resolved.categories.map(c => c.toLowerCase().trim()).filter(Boolean);
+    } else {
+      categoriesFilter = [resolved.categories.toLowerCase().trim()];
+    }
+  } else if (resolved.category) {
+    categoriesFilter = [resolved.category.toLowerCase().trim()];
+  }
+  // Set to undefined if empty array, not empty array
+  if (categoriesFilter && categoriesFilter.length === 0) {
+    categoriesFilter = undefined;
+  }
+
   const browseV2Filters: Filters = {
     q: resolved.q || undefined,
-    categories: Array.isArray(resolved.categories)
-      ? resolved.categories
-      : resolved.categories
-      ? [resolved.categories]
-      : resolved.category
-      ? [resolved.category]
-      : undefined,
+    categories: categoriesFilter,
     type:
       resolved.type === 'ONLINE'
         ? 'online'

@@ -252,9 +252,9 @@ export async function getUniqueCategories(): Promise<string[]> {
 
 /**
  * Mark chore as IN_PROGRESS
- * Security: Only the assigned worker can start the chore
+ * Security: Only the assigned user can start the chore (role-agnostic)
  * @param choreId - The chore ID
- * @param workerId - Must be from session (not from client)
+ * @param workerId - Must be from session (not from client) - can be any user assigned to the chore
  */
 export async function markChoreInProgress(choreId: string, workerId: string) {
   // Ensure chore exists
@@ -271,7 +271,7 @@ export async function markChoreInProgress(choreId: string, workerId: string) {
     throw new AuthorizationError(AUTH_ERRORS.NOT_FOUND, 'Chore not found')
   }
 
-  // Security: Only the assigned worker can start
+  // Security: Only the assigned user can start (no role check - any assigned user can do this)
   if (chore.assignedWorkerId !== workerId) {
     throw new AuthorizationError(
       AUTH_ERRORS.FORBIDDEN_OWNER,
@@ -306,9 +306,9 @@ export async function markChoreInProgress(choreId: string, workerId: string) {
 
 /**
  * Mark chore as COMPLETED
- * Security: Only the assigned worker can complete the chore
+ * Security: Only the assigned user can complete the chore (role-agnostic)
  * @param choreId - The chore ID
- * @param workerId - Must be from session (not from client)
+ * @param workerId - Must be from session (not from client) - can be any user assigned to the chore
  */
 export async function markChoreCompleted(choreId: string, workerId: string) {
   const chore = await prisma.chore.findUnique({
@@ -324,7 +324,7 @@ export async function markChoreCompleted(choreId: string, workerId: string) {
     throw new AuthorizationError(AUTH_ERRORS.NOT_FOUND, 'Chore not found')
   }
 
-  // Security: Only the assigned worker can complete
+  // Security: Only the assigned user can complete (no role check - any assigned user can do this)
   if (chore.assignedWorkerId !== workerId) {
     throw new AuthorizationError(
       AUTH_ERRORS.FORBIDDEN_OWNER,

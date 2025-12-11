@@ -30,9 +30,13 @@ export function FiltersChipsBar({ filters, onRemove, onClearAll }: FiltersChipsB
 
   // Categories
   filters.categories?.forEach(catId => {
-    const cat = CATEGORIES.find(c => c.id === catId);
+    // Try to find in CATEGORIES first, but also handle categories that come from server (may be labels)
+    const cat = CATEGORIES.find(c => c.id === catId || c.label.toLowerCase() === catId.toLowerCase());
     if (cat) {
       activeFilters.push({ key: 'categories', label: `${cat.icon} ${cat.label}`, value: catId });
+    } else {
+      // Fallback: display the category ID/label as-is if not found in CATEGORIES
+      activeFilters.push({ key: 'categories', label: catId, value: catId });
     }
   });
 

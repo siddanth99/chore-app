@@ -106,9 +106,30 @@ export function BrowseChoresPageEnhanced({
     }
 
     if (filters.categories?.length) {
-      result = result.filter(c => 
-        filters.categories!.includes(c.category.toLowerCase())
-      );
+      // Category can be stored as string (label) or object (id/label)
+      // Filter categories are IDs (like "cleaning"), chore.category might be a label (like "Cleaning")
+      // Normalize both for comparison
+      result = result.filter(c => {
+        const rawCategory =
+  typeof c.category === 'string'
+    ? c.category
+    : c.category
+    ? // treat it as a generic object with label/id
+      ((c.category as any).label ??
+        (c.category as any).id ??
+        '')
+    : '';
+
+const choreCategory = rawCategory.toLowerCase().trim();
+        
+        return filters.categories!.some(filterCat => {
+          const filterCategoryNormalized = filterCat.toLowerCase().trim();
+          // Match if exact match or if chore category contains filter category or vice versa
+          return choreCategory === filterCategoryNormalized ||
+                 choreCategory.includes(filterCategoryNormalized) ||
+                 filterCategoryNormalized.includes(choreCategory);
+        });
+      });
     }
 
     if (filters.type && filters.type !== 'all') {
@@ -141,9 +162,17 @@ export function BrowseChoresPageEnhanced({
   const handleRemoveFilter = useCallback((key: keyof Filters, value?: string) => {
     const updated = { ...filters };
     if (key === 'categories' && value) {
-      updated.categories = updated.categories?.filter(c => c !== value);
+      const remaining = updated.categories?.filter(c => c !== value);
+      // Set to undefined if empty array, not empty array
+      updated.categories = remaining && remaining.length > 0 ? remaining : undefined;
+    } else if (key === 'categories' && !value) {
+      // Remove all categories
+      updated.categories = undefined;
     } else if (key === 'status' && value) {
-      updated.status = updated.status?.filter(s => s !== value);
+      const remaining = updated.status?.filter(s => s !== value);
+      updated.status = remaining && remaining.length > 0 ? remaining : undefined;
+    } else if (key === 'status' && !value) {
+      updated.status = undefined;
     } else if (key === 'minBudget' || key === 'maxBudget') {
       updated.minBudget = null;
       updated.maxBudget = null;
@@ -480,6 +509,7 @@ export function BrowseChoresPageEnhanced({
                 onChange={onFiltersChange}
                 viewMode={viewMode}
                 clearFilters={clearFilters}
+                categories={serverCategories}
               />
             </div>
 
@@ -508,6 +538,7 @@ export function BrowseChoresPageEnhanced({
                       isMobile
                       viewMode={viewMode}
                       clearFilters={clearFilters}
+                      categories={serverCategories}
                     />
                   </motion.div>
                 </>

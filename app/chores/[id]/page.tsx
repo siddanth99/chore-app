@@ -1,3 +1,4 @@
+import { redirect } from 'next/navigation'
 import { getChoreById } from '@/server/api/chores'
 import { getCurrentUser } from '@/server/auth/role'
 import { listApplicationsForChore } from '@/server/api/applications'
@@ -11,6 +12,12 @@ export default async function ChoreDetailPage(props: {
   const { id } = await props.params
 
   const user = await getCurrentUser()
+
+  // Require authentication - redirect to signin if not logged in
+  if (!user) {
+    redirect(`/signin?callbackUrl=/chores/${id}`)
+  }
+
   const chore = await getChoreById(id)
 
   // If the chore is not found, show a debug message

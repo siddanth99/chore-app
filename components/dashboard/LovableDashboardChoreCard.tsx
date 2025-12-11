@@ -3,6 +3,7 @@
 import * as React from 'react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { getCategoryIcon } from '../chores/categories';
 
 interface DashboardChoreCardProps {
   title: string;
@@ -68,10 +69,7 @@ export function LovableDashboardChoreCard({
         {/* Meta info */}
         <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground mb-4">
           <span className="inline-flex items-center gap-1.5">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
-              <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
-            </svg>
+            <span>{getCategoryIcon(category)}</span>
             {category}
           </span>
           <span className="inline-flex items-center gap-1.5">
