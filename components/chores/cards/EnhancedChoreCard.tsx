@@ -148,52 +148,47 @@ export function EnhancedChoreCard({
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4, delay: index * 0.05 }}
-        className="glass-card p-4 flex items-center gap-4 group cursor-pointer hover:border-primary/30 transition-all"
+        className="w-full rounded-lg border border-border bg-background p-3 md:p-4 shadow-sm hover:shadow transition-all cursor-pointer group"
         onClick={() => onView?.(chore.id)}
         onKeyDown={handleKeyDown}
         tabIndex={0}
         role="article"
         aria-labelledby={`chore-compact-${chore.id}`}
       >
-        {/* Thumbnail or Avatar */}
-        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center flex-shrink-0">
-          <span className="text-xl">{category.icon}</span>
-        </div>
-
-        {/* Content */}
-        <div className="flex-1 min-w-0">
-          <h4 id={`chore-compact-${chore.id}`} className="font-semibold text-foreground truncate group-hover:text-primary transition-colors">
-            {chore.title}
-          </h4>
-          <div className="flex items-center gap-3 text-sm text-muted-foreground">
-            {chore.location && (
-              <span className="flex items-center gap-1">
-                <MapPin className="w-3 h-3" />
-                {chore.location}
-              </span>
-            )}
-            <span>
-              <ClientOnlyDate isoDate={chore.createdAt} mode="relative" />
-            </span>
+        <div className="flex items-start gap-3 md:gap-4">
+          {/* Thumbnail or Avatar */}
+          <div className="w-10 h-10 md:w-12 md:h-12 rounded-lg bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center flex-shrink-0">
+            <span className="text-lg md:text-xl">{category.icon}</span>
           </div>
-        </div>
 
-        {/* Budget & Action */}
-        <div className="flex items-center gap-3">
-          <span className="px-3 py-1 rounded-full bg-accent/20 text-accent font-semibold text-sm">
-            {formatPrice(chore, chore.currency)}
-          </span>
-          <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium opacity-0 group-hover:opacity-100 transition-opacity"
-            onClick={(e) => {
-              e.stopPropagation();
-              onView?.(chore.id);
-            }}
-          >
-            Bid
-          </motion.button>
+          {/* Content */}
+          <div className="flex-1 min-w-0">
+            <div className="flex items-start justify-between gap-2 mb-2">
+              <h4 id={`chore-compact-${chore.id}`} className="font-semibold text-sm md:text-base text-foreground line-clamp-2 group-hover:text-primary transition-colors flex-1">
+                {chore.title}
+              </h4>
+              <span className="px-2 md:px-3 py-1 rounded-full bg-accent/20 text-accent font-semibold text-xs md:text-sm flex-shrink-0">
+                {formatPrice(chore, chore.currency)}
+              </span>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 text-xs md:text-sm text-muted-foreground">
+              {chore.location && (
+                <span className="flex items-center gap-1 truncate max-w-full">
+                  <MapPin className="w-3 h-3 flex-shrink-0" />
+                  <span className="truncate">{chore.location}</span>
+                </span>
+              )}
+              <span className="flex items-center gap-1">
+                <Clock className="w-3 h-3 flex-shrink-0" />
+                <ClientOnlyDate isoDate={chore.createdAt} mode="relative" />
+              </span>
+              {category.label && (
+                <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] md:text-xs">
+                  {category.icon} {category.label}
+                </span>
+              )}
+            </div>
+          </div>
         </div>
       </motion.div>
     );
@@ -225,7 +220,7 @@ export function EnhancedChoreCard({
 
       {/* Image Section */}
       {chore.imageUrl ? (
-        <div className="relative h-40 overflow-hidden">
+        <div className="relative h-32 md:h-40 overflow-hidden">
           <motion.img
             src={chore.imageUrl}
             alt={chore.title}
@@ -256,7 +251,7 @@ export function EnhancedChoreCard({
           </div>
         </div>
       ) : (
-        <div className="h-32 bg-gradient-to-br from-primary/10 via-accent/10 to-highlight/10 relative flex items-center justify-center">
+        <div className="h-24 md:h-32 bg-gradient-to-br from-primary/10 via-accent/10 to-highlight/10 relative flex items-center justify-center">
           <span className="text-4xl opacity-50">{category.icon}</span>
           
           {/* Category Badge */}
@@ -282,50 +277,50 @@ export function EnhancedChoreCard({
       )}
 
       {/* Content Section */}
-      <div className="p-5 space-y-4">
+      <div className="p-3 md:p-5 space-y-3 md:space-y-4">
         {/* Title */}
         <h3
           id={`chore-${chore.id}`}
-          className="font-bold text-lg text-foreground line-clamp-2 group-hover:text-primary transition-colors"
+          className="font-bold text-base md:text-lg text-foreground line-clamp-2 group-hover:text-primary transition-colors"
         >
           {chore.title}
         </h3>
 
         {/* Description */}
-        <p className="text-sm text-muted-foreground line-clamp-3">
+        <p className="text-xs md:text-sm text-muted-foreground line-clamp-2 md:line-clamp-3">
           {chore.description}
         </p>
 
         {/* Meta Info */}
-        <div className="flex items-center gap-4 text-sm text-muted-foreground">
+        <div className="flex flex-wrap items-center gap-2 md:gap-4 text-xs md:text-sm text-muted-foreground">
           {chore.location && (
-            <span className="flex items-center gap-1">
-              <MapPin className="w-3.5 h-3.5" />
-              {chore.location}
+            <span className="flex items-center gap-1 truncate max-w-full">
+              <MapPin className="w-3 h-3 md:w-3.5 md:h-3.5 flex-shrink-0" />
+              <span className="truncate">{chore.location}</span>
             </span>
           )}
           <span className="flex items-center gap-1">
-            <Clock className="w-3.5 h-3.5" />
+            <Clock className="w-3 h-3 md:w-3.5 md:h-3.5 flex-shrink-0" />
             <ClientOnlyDate isoDate={chore.createdAt} mode="relative" />
           </span>
           {chore.applications !== undefined && (
             <span className="flex items-center gap-1">
-              <Users className="w-3.5 h-3.5" />
+              <Users className="w-3 h-3 md:w-3.5 md:h-3.5 flex-shrink-0" />
               {chore.applications}
             </span>
           )}
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between pt-3 border-t border-border/50">
+        <div className="flex items-center justify-between pt-2 md:pt-3 border-t border-border/50 gap-2">
           {/* Budget */}
-          <span className="px-4 py-1.5 rounded-full bg-accent/20 text-accent font-bold text-sm">
+          <span className="px-3 md:px-4 py-1 md:py-1.5 rounded-full bg-accent/20 text-accent font-bold text-xs md:text-sm">
             {formatPrice(chore, chore.currency)}
           </span>
 
           {/* Type Badge */}
           <span className={cn(
-            'px-3 py-1 rounded-full text-xs font-medium',
+            'px-2 md:px-3 py-1 rounded-full text-[10px] md:text-xs font-medium flex-shrink-0',
             chore.type === 'online'
               ? 'bg-primary/20 text-primary'
               : 'bg-secondary text-secondary-foreground'

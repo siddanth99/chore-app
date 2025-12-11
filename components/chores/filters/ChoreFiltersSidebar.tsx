@@ -30,6 +30,7 @@ interface ChoreFiltersSidebarProps {
   viewMode?: 'grid' | 'list' | 'map';
   clearFilters?: () => void;
   categories?: Array<{ id: string; label: string }>; // Optional: real categories from server
+  onApply?: () => void; // New prop to track when filters are applied
 }
 
 /**
@@ -44,6 +45,7 @@ export function ChoreFiltersSidebar({
   viewMode,
   clearFilters,
   categories: serverCategories,
+  onApply,
 }: ChoreFiltersSidebarProps) {
   const [localFilters, setLocalFilters] = useState<Filters>(() => ({
     ...DEFAULT_FILTERS,
@@ -119,6 +121,9 @@ export function ChoreFiltersSidebar({
 
   const handleApply = () => {
     onChange(localFilters);
+    if (onApply) {
+      onApply(); // Notify parent that filters were intentionally applied
+    }
     if (isMobile && onClose) onClose();
   };
 
@@ -128,37 +133,12 @@ export function ChoreFiltersSidebar({
     if (clearFilters) {
       clearFilters();
     }
+    if (isMobile && onClose) onClose();
   };
 
-  return (
-    <motion.aside
-      initial={{ opacity: 0, x: -20 }}
-      animate={{ opacity: 1, x: 0 }}
-      exit={{ opacity: 0, x: -20 }}
-      transition={{ duration: 0.3, ease: 'easeOut' }}
-      className={cn(
-        'glass-card p-5 space-y-6',
-        isMobile ? 'w-full h-full overflow-visible' : 'sticky top-24 w-72 min-h-[720px] sm:min-h-[640px] md:min-h-[720px] max-h-[1200px] overflow-visible scrollbar-hide'
-      )}
-      aria-label="Filter chores"
-    >
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <SlidersHorizontal className="w-5 h-5 text-primary" />
-          <h3 className="font-semibold text-foreground">Filters</h3>
-        </div>
-        {isMobile && onClose && (
-          <button
-            onClick={onClose}
-            className="p-2 rounded-lg hover:bg-secondary transition-colors"
-            aria-label="Close filters"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        )}
-      </div>
-
+  // Shared filter content component
+  const FilterContent = () => (
+    <>
       {/* Search Input */}
       <div className="relative">
         <motion.div
@@ -197,13 +177,11 @@ export function ChoreFiltersSidebar({
         <label className="text-sm font-medium text-muted-foreground">Categories</label>
         <div className="flex flex-wrap gap-2">
           {(serverCategories || CATEGORIES).map((category) => {
-            // Normalize: serverCategories has { id, label }, CATEGORIES has { id, label, icon }
             const categoryId = typeof category === 'string' ? category : category.id;
             const categoryLabel = typeof category === 'string' ? category : category.label;
             const categoryIcon = 'icon' in category ? category.icon : '📋';
             const isSelected = localFilters.categories?.includes(categoryId);
             
-            // Try to match with CATEGORIES for icon if not provided
             const matchedCategory = CATEGORIES.find(c => c.id === categoryId || c.label.toLowerCase() === categoryLabel.toLowerCase());
             const displayIcon = matchedCategory?.icon || categoryIcon;
             
@@ -256,7 +234,6 @@ export function ChoreFiltersSidebar({
           Budget Range
         </label>
         <div className="relative">
-          {/* Visual histogram background */}
           <div className="absolute inset-x-0 bottom-0 h-8 flex items-end justify-between gap-0.5 opacity-20" aria-hidden="true">
             {[3, 5, 8, 12, 10, 7, 4, 6, 9, 11, 8, 5].map((height, i) => (
               <div
@@ -294,7 +271,6 @@ export function ChoreFiltersSidebar({
                 if (!isNaN(numValue)) {
                   updateFilters({ minBudget: numValue });
                 } else {
-                  // If invalid, reset to current filter value
                   setMinText(String(localFilters.minBudget ?? 0));
                 }
               }}
@@ -319,7 +295,6 @@ export function ChoreFiltersSidebar({
                 if (!isNaN(numValue)) {
                   updateFilters({ maxBudget: numValue });
                 } else {
-                  // If invalid, reset to current filter value
                   setMaxText(String(localFilters.maxBudget ?? 10000));
                 }
               }}
@@ -398,8 +373,8 @@ export function ChoreFiltersSidebar({
 
       {/* Location Radius Slider - show when map view, near me, or showMap is active */}
       {(viewMode === 'map' || localFilters.showMap || localFilters.nearMe) && (
-        <div className="mt-6">
-          <h4 className="text-sm font-medium mb-2">Search radius (km)</h4>
+        <div className="space-y-3">
+          <h4 className="text-sm font-medium text-foreground">Search radius (km)</h4>
           <LocationRadiusSlider
             value={localFilters.radius ?? 5}
             min={0}
@@ -409,23 +384,95 @@ export function ChoreFiltersSidebar({
           />
         </div>
       )}
+    </>
+  );
 
-      {/* Action Buttons */}
-      <div className="flex gap-3 pt-2">
-        <Button
-          variant="ghost"
-          onClick={handleClear}
-          className="flex-1"
-        >
-          Clear
-        </Button>
-        <Button
-          onClick={handleApply}
-          className="flex-1 bg-primary hover:bg-primary/90"
-        >
-          Apply Filters
-        </Button>
-      </div>
+  return (
+    <motion.aside
+      initial={{ opacity: 0, x: -20 }}
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: -20 }}
+      transition={{ duration: 0.3, ease: 'easeOut' }}
+      className={cn(
+        'glass-card space-y-6',
+        isMobile 
+          ? 'w-full h-full flex flex-col overflow-hidden' 
+          : 'sticky top-24 w-72 min-h-[720px] sm:min-h-[640px] md:min-h-[720px] max-h-[1200px] overflow-visible scrollbar-hide p-5'
+      )}
+      aria-label="Filter chores"
+    >
+      {isMobile ? (
+        <>
+          {/* Mobile: Header - fixed at top */}
+          <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-border flex-shrink-0">
+            <div className="flex items-center gap-2">
+              <SlidersHorizontal className="w-5 h-5 text-primary" />
+              <h3 className="font-semibold text-foreground">Filters</h3>
+            </div>
+            {onClose && (
+              <button
+                onClick={onClose}
+                className="p-2 rounded-lg hover:bg-secondary transition-colors"
+                aria-label="Close filters"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            )}
+          </div>
+
+          {/* Mobile: Scrollable content */}
+          <div className="flex-1 overflow-y-auto px-5 py-4 space-y-6">
+            <FilterContent />
+          </div>
+
+          {/* Mobile: Fixed bottom action bar */}
+          <div className="border-t border-border bg-background px-5 py-4 flex items-center justify-between gap-3 flex-shrink-0">
+            <Button
+              variant="outline"
+              onClick={handleClear}
+              className="flex-1"
+            >
+              Clear
+            </Button>
+            <Button
+              onClick={handleApply}
+              className="flex-1 bg-primary hover:bg-primary/90"
+            >
+              Apply
+            </Button>
+          </div>
+        </>
+      ) : (
+        <>
+          {/* Desktop: Header */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <SlidersHorizontal className="w-5 h-5 text-primary" />
+              <h3 className="font-semibold text-foreground">Filters</h3>
+            </div>
+          </div>
+
+          {/* Desktop: Filter content */}
+          <FilterContent />
+
+          {/* Desktop: Action buttons */}
+          <div className="flex gap-3 pt-2">
+            <Button
+              variant="ghost"
+              onClick={handleClear}
+              className="flex-1"
+            >
+              Clear
+            </Button>
+            <Button
+              onClick={handleApply}
+              className="flex-1 bg-primary hover:bg-primary/90"
+            >
+              Apply Filters
+            </Button>
+          </div>
+        </>
+      )}
     </motion.aside>
   );
 }
