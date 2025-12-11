@@ -132,14 +132,14 @@ export default function DashboardChoreCard({
           {showEarnings && (
             <div className="flex items-center text-sm font-medium text-green-600">
               <span>💰 Earned:</span>
-              <span className="ml-2">${earnings}</span>
+              <span className="ml-2">₹{earnings}</span>
             </div>
           )}
 
           {chore.budget && !showEarnings && (
             <div className="flex items-center text-sm text-slate-500 dark:text-slate-400">
               <span className="font-medium">Budget:</span>
-              <span className="ml-2">${chore.budget}</span>
+              <span className="ml-2">₹{chore.budget}</span>
             </div>
           )}
 

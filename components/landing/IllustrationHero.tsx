@@ -28,7 +28,7 @@ export function IllustrationHero() {
                     <p className="text-xs font-medium">Lawn Mowing</p>
                     <p className="text-[10px] text-muted-foreground">2 miles away</p>
                   </div>
-                  <span className="text-xs font-bold text-primary">$45</span>
+                  <span className="text-xs font-bold text-primary">₹45</span>
                 </div>
               </div>
               <div className="bg-card p-3 rounded-xl border border-border/50">
@@ -37,7 +37,7 @@ export function IllustrationHero() {
                     <p className="text-xs font-medium">House Cleaning</p>
                     <p className="text-[10px] text-muted-foreground">0.5 miles away</p>
                   </div>
-                  <span className="text-xs font-bold text-accent">$80</span>
+                  <span className="text-xs font-bold text-accent">₹80</span>
                 </div>
               </div>
               <div className="bg-card p-3 rounded-xl border border-border/50 opacity-70">
@@ -46,7 +46,7 @@ export function IllustrationHero() {
                     <p className="text-xs font-medium">Furniture Assembly</p>
                     <p className="text-[10px] text-muted-foreground">1.2 miles away</p>
                   </div>
-                  <span className="text-xs font-bold text-highlight">$65</span>
+                  <span className="text-xs font-bold text-highlight">₹65</span>
                 </div>
               </div>
             </div>

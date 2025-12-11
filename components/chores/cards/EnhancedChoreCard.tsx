@@ -328,7 +328,7 @@ export function EnhancedChoreCard({
   );
 }
 
-function formatPrice(chore: any, currency: string = '$'): string {
+function formatPrice(chore: any, currency: string = '₹'): string {
   const v = parsePriceValue(chore);
   if (v == null) return '—';
   // Use INR formatting for Indian Rupees, otherwise use simple format
