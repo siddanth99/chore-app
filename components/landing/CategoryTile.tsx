@@ -40,7 +40,13 @@ export function CategoryTile({ name, icon, gradient, count }: CategoryTileProps)
       <h3 className="text-lg font-semibold mb-1">{name}</h3>
       
       {/* Count */}
-      <p className="text-sm text-foreground/70">{count} jobs available</p>
+      <p className="text-sm text-foreground/70">
+        {count === 0 
+          ? '0 chores available' 
+          : count === 1 
+          ? '1 chore available' 
+          : `${count} chores available`}
+      </p>
       
       {/* Hover overlay */}
       <div className="absolute inset-0 bg-foreground/5 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
@@ -52,29 +58,17 @@ export function CategoryTile({ name, icon, gradient, count }: CategoryTileProps)
   );
 }
 
-const categories = [
-  {
-    name: 'Cleaning',
+// Map category names to icons and gradients
+const CATEGORY_METADATA: Record<string, { icon: React.ReactNode; gradient: string }> = {
+  'Cleaning': {
     icon: (
       <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
         <path d="M3 21h18M5 21V7l8-4 8 4v14M9 21v-6h6v6" />
       </svg>
     ),
     gradient: 'bg-gradient-to-br from-blue-500/20 to-cyan-500/20',
-    count: 234,
   },
-  {
-    name: 'Lawn & Garden',
-    icon: (
-      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-        <path d="M12 2L12 22M12 2C8 6 4 8 4 12C4 16 8 18 12 22M12 2C16 6 20 8 20 12C20 16 16 18 12 22" />
-      </svg>
-    ),
-    gradient: 'bg-gradient-to-br from-green-500/20 to-emerald-500/20',
-    count: 186,
-  },
-  {
-    name: 'Moving Help',
+  'Moving': {
     icon: (
       <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
         <rect x="3" y="8" width="18" height="12" rx="2" />
@@ -82,31 +76,25 @@ const categories = [
       </svg>
     ),
     gradient: 'bg-gradient-to-br from-orange-500/20 to-amber-500/20',
-    count: 127,
   },
-  {
-    name: 'Handyman',
+  'Repairs': {
     icon: (
       <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
         <path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z" />
       </svg>
     ),
     gradient: 'bg-gradient-to-br from-purple-500/20 to-indigo-500/20',
-    count: 312,
   },
-  {
-    name: 'Assembly',
+  'Cooking': {
     icon: (
       <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-        <rect x="4" y="13" width="16" height="8" rx="1" />
-        <path d="M6 13V5a2 2 0 012-2h8a2 2 0 012 2v8" />
+        <path d="M3 12h18M3 6h18M3 18h18" />
+        <circle cx="12" cy="12" r="2" />
       </svg>
     ),
-    gradient: 'bg-gradient-to-br from-pink-500/20 to-rose-500/20',
-    count: 89,
+    gradient: 'bg-gradient-to-br from-red-500/20 to-pink-500/20',
   },
-  {
-    name: 'Delivery',
+  'Delivery': {
     icon: (
       <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
         <rect x="1" y="3" width="15" height="13" rx="2" />
@@ -116,11 +104,83 @@ const categories = [
       </svg>
     ),
     gradient: 'bg-gradient-to-br from-teal-500/20 to-cyan-500/20',
-    count: 156,
   },
-];
+  'Pet Care': {
+    icon: (
+      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+        <path d="M11.25 4.533A9.707 9.707 0 006 3a9.735 9.735 0 00-3.25.555.75.75 0 00-.5.707v14.25a.75.75 0 001 .707A8.237 8.237 0 016 18.75c1.995 0 3.823.707 5.25 1.886V4.533zM12.75 20.636A8.214 8.214 0 0118 18.75c.966 0 1.89.166 2.75.47a.75.75 0 001-.708V4.262a.75.75 0 00-.5-.707A9.735 9.735 0 0018 3a9.707 9.707 0 00-5.25 1.533v16.103z" />
+      </svg>
+    ),
+    gradient: 'bg-gradient-to-br from-green-500/20 to-emerald-500/20',
+  },
+  // Fallback for unknown categories
+  'default': {
+    icon: (
+      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+        <rect x="4" y="13" width="16" height="8" rx="1" />
+        <path d="M6 13V5a2 2 0 012-2h8a2 2 0 012 2v8" />
+      </svg>
+    ),
+    gradient: 'bg-gradient-to-br from-gray-500/20 to-slate-500/20',
+  },
+};
 
-export function FeaturedCategories() {
+function getCategoryMetadata(name: string) {
+  return CATEGORY_METADATA[name] || CATEGORY_METADATA['default'];
+}
+
+interface FeaturedCategoriesProps {
+  categories?: Array<{ name: string; count: number }>;
+}
+
+export function FeaturedCategories({ categories }: FeaturedCategoriesProps) {
+  // Use provided categories if available, otherwise fallback to default hardcoded list
+  const displayCategories = categories && categories.length > 0
+    ? categories.map(cat => ({
+        name: cat.name,
+        count: cat.count,
+        ...getCategoryMetadata(cat.name),
+      }))
+    : [
+        {
+          name: 'Cleaning',
+          count: 0,
+          ...CATEGORY_METADATA['Cleaning'],
+        },
+        {
+          name: 'Moving',
+          count: 0,
+          ...CATEGORY_METADATA['Moving'],
+        },
+        {
+          name: 'Repairs',
+          count: 0,
+          ...CATEGORY_METADATA['Repairs'],
+        },
+        {
+          name: 'Cooking',
+          count: 0,
+          ...CATEGORY_METADATA['Cooking'],
+        },
+        {
+          name: 'Delivery',
+          count: 0,
+          ...CATEGORY_METADATA['Delivery'],
+        },
+        {
+          name: 'Pet Care',
+          count: 0,
+          ...CATEGORY_METADATA['Pet Care'],
+        },
+      ];
+
+  // Format count text
+  const formatCount = (count: number) => {
+    if (count === 0) return '0 chores available';
+    if (count === 1) return '1 chore available';
+    return `${count} chores available`;
+  };
+
   return (
     <section id="categories" className="py-16 sm:py-24">
       <div className="container mx-auto px-4 sm:px-6 lg:px-8">
@@ -132,9 +192,14 @@ export function FeaturedCategories() {
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-          {categories.map((category, index) => (
+          {displayCategories.map((category, index) => (
             <div key={category.name} className={`fade-up fade-up-delay-${(index % 4) + 1}`}>
-              <CategoryTile {...category} />
+              <CategoryTile
+                name={category.name}
+                icon={category.icon}
+                gradient={category.gradient}
+                count={category.count}
+              />
             </div>
           ))}
         </div>

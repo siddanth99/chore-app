@@ -1,7 +1,6 @@
 // web/app/api/chores/[choreId]/status/route.ts
 import { NextRequest, NextResponse } from 'next/server'
-import { UserRole } from '@prisma/client'
-import { requireRole, getHttpStatusForAuthError, isAuthError, AuthorizationError, AUTH_ERRORS } from '@/server/auth/role'
+import { requireAuth, getHttpStatusForAuthError, isAuthError, AuthorizationError, AUTH_ERRORS } from '@/server/auth/role'
 import { markChoreInProgress, markChoreCompleted } from '@/server/api/chores'
 
 type StatusParams = {
@@ -10,16 +9,16 @@ type StatusParams = {
 
 /**
  * PATCH /api/chores/[choreId]/status
- * Start or complete a chore (WORKER only)
- * Security: workerId always comes from session
+ * Start or complete a chore (available to any assigned user, regardless of role)
+ * Security: userId comes from session, and user must be assigned to the chore
  */
 export async function PATCH(
   request: NextRequest,
   context: { params: Promise<StatusParams> }
 ) {
   try {
-    // RBAC: Only workers can update chore status
-    const user = await requireRole(UserRole.WORKER)
+    // Require authentication (no role restriction - any assigned user can start/complete)
+    const user = await requireAuth()
 
     const { choreId } = await context.params
 

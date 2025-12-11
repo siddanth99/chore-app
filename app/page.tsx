@@ -1,6 +1,7 @@
 // app/page.tsx
 import LandingPage from '@/components/landing/LandingPage';
 import { listPublishedChoresWithFilters } from '@/server/api/chores';
+import { getCategoriesWithCounts } from '@/server/api/categories';
 import type { ChoreCardProps } from '@/components/landing/ChoreCard';
 
 export const metadata = {
@@ -12,12 +13,15 @@ export const metadata = {
 export const revalidate = 60;
 
 export default async function Home() {
-  // TODO: replace with more specific server helper if needed
-  // Fetch published chores server-side
+  // Fetch published chores and categories with counts in parallel
   let chores: ChoreCardProps[] = [];
+  let categories: Array<{ name: string; count: number }> = [];
   
   try {
-    const rawChores = await listPublishedChoresWithFilters({}, undefined);
+    const [rawChores, categoriesWithCounts] = await Promise.all([
+      listPublishedChoresWithFilters({}, undefined),
+      getCategoriesWithCounts(false), // Only published chores
+    ]);
     
     // Transform to ChoreCardProps format, limit to 6
     chores = rawChores.slice(0, 6).map((chore) => ({
@@ -31,10 +35,16 @@ export default async function Home() {
       createdAt: chore.createdAt.toISOString(),
       urgent: false, // TODO: Add urgent field to chore model if needed
     }));
+
+    // Transform categories with counts, take first 6
+    categories = categoriesWithCounts.slice(0, 6).map(c => ({
+      name: c.name,
+      count: c.count,
+    }));
   } catch (error) {
-    console.error('[Home] Failed to fetch chores:', error);
-    // Fallback to empty array - will show empty state
+    console.error('[Home] Failed to fetch data:', error);
+    // Fallback to empty arrays - will show empty states
   }
 
-  return <LandingPage chores={chores} />;
+  return <LandingPage chores={chores} categories={categories} />;
 }

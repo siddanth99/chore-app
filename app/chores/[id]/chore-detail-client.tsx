@@ -727,7 +727,9 @@ export default function ChoreDetailClient({
                   {workerApplication.bidAmount && (
                     <div className="flex items-center gap-2">
                       <span className="font-medium text-emerald-800 dark:text-emerald-200">Your Bid:</span>
-                      <span className="text-emerald-700 dark:text-emerald-300">${workerApplication.bidAmount}</span>
+                      <span className="text-emerald-700 dark:text-emerald-300">
+                        ₹{workerApplication.bidAmount.toLocaleString('en-IN')}
+                      </span>
                     </div>
                   )}
                   {workerApplication.message && (

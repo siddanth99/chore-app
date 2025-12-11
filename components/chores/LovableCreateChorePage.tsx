@@ -19,6 +19,7 @@ import {
   Upload, X, Image as ImageIcon, DollarSign, Clock, Eye, 
   AlertCircle, CheckCircle, ChevronDown
 } from 'lucide-react';
+import { getCategoryIcon } from './categories';
 import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -260,16 +261,10 @@ export function ChoreTypeToggle({
 /**
  * Suggested categories for quick selection
  */
-const SUGGESTED_CATEGORIES = [
-  'Cleaning',
-  'Moving',
-  'Gardening',
-  'Tech Support',
-  'Handyman',
-  'Delivery',
-  'Dog Walking',
-  'Other',
-];
+import { POPULAR_CATEGORIES } from './categories';
+
+// Use the centralized POPULAR_CATEGORIES list for pills
+const SUGGESTED_CATEGORIES = POPULAR_CATEGORIES;
 
 /**
  * Category input with suggested presets + custom text input
@@ -323,13 +318,52 @@ export function CategorySelect({
                 disabled && "opacity-50 cursor-not-allowed"
               )}
             >
-              {categoryData && (
-                <categoryData.icon className={cn("w-3.5 h-3.5", isSelected ? "" : categoryData.color)} />
-              )}
+              <span className="text-base">{getCategoryIcon(cat.label)}</span>
               {cat.label}
             </button>
           );
         })}
+      </div>
+      
+      {/* Dropdown/Select for all categories */}
+      <div className="relative">
+        <select
+          value={selectedCategory?.id || value || ''}
+          onChange={(e) => {
+            const selectedValue = e.target.value;
+            if (selectedValue) {
+              onChange(selectedValue);
+            }
+          }}
+          disabled={disabled}
+          className={cn(
+            "w-full px-3 py-2 pr-10 rounded-lg border border-border bg-background text-foreground",
+            "focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
+            "disabled:opacity-50 disabled:cursor-not-allowed",
+            "appearance-none bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTIiIGhlaWdodD0iOCIgdmlld0JveD0iMCAwIDEyIDgiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxwYXRoIGQ9Ik0xIDFMNiA2TDExIDEiIHN0cm9rZT0iY3VycmVudENvbG9yIiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPgo8L3N2Zz4K')] bg-[length:12px_8px] bg-[right_0.75rem_center] bg-no-repeat"
+          )}
+        >
+          <option value="">Select a category...</option>
+          {/* Popular categories first */}
+          {suggestedCategoryIds.map((cat) => (
+            <option key={cat.id} value={cat.id}>
+              {getCategoryIcon(cat.label)} {cat.label}
+            </option>
+          ))}
+          {/* Other categories from API */}
+          {categoryList
+            .filter(cat => !suggestedCategoryIds.some(s => s.id === cat.id))
+            .map((cat) => (
+              <option key={cat.id} value={cat.id}>
+                {getCategoryIcon(cat.label)} {cat.label}
+              </option>
+            ))}
+        </select>
+        {selectedCategory && (
+          <div className="absolute right-10 top-1/2 -translate-y-1/2 pointer-events-none text-lg">
+            {getCategoryIcon(selectedCategory.label)}
+          </div>
+        )}
       </div>
       
       {/* Custom category input - stores as ID if matches, otherwise as custom label */}
@@ -351,15 +385,15 @@ export function CategorySelect({
             disabled && "opacity-50 cursor-not-allowed"
           )}
         />
-        {selectedCategory && (
-          <div className="absolute right-3 top-1/2 -translate-y-1/2">
-            <selectedCategory.icon className={cn("w-4 h-4", selectedCategory.color)} />
+        {selectedCategory && !categoryList.find(c => c.id === selectedCategory.id) && (
+          <div className="absolute right-3 top-1/2 -translate-y-1/2 text-lg">
+            {getCategoryIcon(selectedCategory.label)}
           </div>
         )}
       </div>
       
       <p className="text-xs text-muted-foreground">
-        Pick a suggested category or enter your own
+        Pick from suggestions, use the dropdown, or enter your own
       </p>
     </motion.div>
   );

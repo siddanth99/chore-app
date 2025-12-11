@@ -50,14 +50,23 @@ export function BrowseChoresClient(props: BrowseChoresClientProps) {
 
   const [viewMode, setViewMode] = useState<'grid' | 'list' | 'map'>(() => initialViewFromProps);
 
+  const isInitialMount = React.useRef(true);
+
   // Filters: derive initial filters directly from props (server snapshot)
   const [filters, setFilters] = useState(() => {
     // clone to avoid accidental mutation
     return { ...(props.initialFilters || {}), radius: props.initialFilters?.radius ?? 5 };
   });
 
-  // chores: start with server snapshot
+  // chores: start with server snapshot, but update when props change (from router.refresh())
   const [chores, setChores] = useState(() => props.initialChores ?? []);
+  
+  // Update chores when initialChores prop changes (from server re-render after filter change)
+  useEffect(() => {
+    if (props.initialChores) {
+      setChores(props.initialChores);
+    }
+  }, [props.initialChores]);
 
   // Transform Prisma chores to browse-v2 Chore format
   const transformedChores: Chore[] = useMemo(() => {
@@ -143,18 +152,75 @@ export function BrowseChoresClient(props: BrowseChoresClientProps) {
     }
   }, [filters, viewMode]);
 
-  // Update URL when viewMode changes (client-only)
+  // Update URL when viewMode or filters change and trigger server re-render if needed
   useEffect(() => {
     if (typeof window === 'undefined') return;
+    
+    // Track if this is the initial mount to avoid navigation on first render
+    
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
+    
     try {
-      const params = new URLSearchParams(window.location.search);
-      params.set('view', viewMode === 'grid' ? 'tiles' : viewMode); // Use 'tiles' in URL for grid
+      const params = new URLSearchParams();
+      
+      // Add view mode
+      params.set('view', viewMode === 'grid' ? 'tiles' : viewMode);
+      
+      // Add search query
+      if (filters.q) {
+        params.set('q', filters.q);
+      }
+      
+      // Add categories (as array)
+      if (filters.categories && filters.categories.length > 0) {
+        filters.categories.forEach(cat => {
+          params.append('categories', cat);
+        });
+      }
+      
+      // Add type
+      if (filters.type && filters.type !== 'all') {
+        params.set('type', filters.type === 'online' ? 'ONLINE' : 'OFFLINE');
+      }
+      
+      // Add budget filters
+      if (filters.minBudget) {
+        params.set('minBudget', filters.minBudget.toString());
+      }
+      if (filters.maxBudget) {
+        params.set('maxBudget', filters.maxBudget.toString());
+      }
+      
+      // Add status (as array)
+      if (filters.status && filters.status.length > 0) {
+        filters.status.forEach(status => {
+          params.append('status', status);
+        });
+      }
+      
+      // Add nearMe/location filters if applicable
+      if (filters.nearMe && userPos) {
+        params.set('workerLat', userPos.lat.toString());
+        params.set('workerLng', userPos.lng.toString());
+        if (filters.radius) {
+          params.set('distanceKm', filters.radius.toString());
+        }
+      }
+      
       const newUrl = `${window.location.pathname}?${params.toString()}`;
+      
+      // Update URL without triggering navigation
       window.history.replaceState({}, '', newUrl);
+      
+      // Trigger server refresh to get new data based on updated filters
+      router.refresh();
     } catch (e) {
       // ignore URL update errors
     }
-  }, [viewMode]);
+  }, [filters, viewMode, userPos, router]);
 
   // Clear filters function
   function clearFilters() {
@@ -210,7 +276,20 @@ export function BrowseChoresClient(props: BrowseChoresClientProps) {
     }
 
     if (filters.categories?.length) {
-      result = result.filter((c) => filters.categories!.includes(c.category.toLowerCase()));
+      // Category is always a string in the Chore type (normalized to lowercase in transformedChores)
+      // Filter categories are IDs (like "cleaning"), chore.category is already normalized
+      // Normalize both for comparison
+      result = result.filter((c) => {
+        const choreCategory = (c.category || '').toLowerCase().trim();
+        
+        return filters.categories!.some(filterCat => {
+          const filterCategoryNormalized = filterCat.toLowerCase().trim();
+          // Match if exact match or if chore category contains filter category or vice versa
+          return choreCategory === filterCategoryNormalized ||
+                 choreCategory.includes(filterCategoryNormalized) ||
+                 filterCategoryNormalized.includes(choreCategory);
+        });
+      });
     }
 
     if (filters.type && filters.type !== 'all') {

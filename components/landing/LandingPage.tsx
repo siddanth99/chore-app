@@ -12,16 +12,17 @@ import { Footer } from './Footer';
 
 export interface LandingPageProps {
   chores?: ChoreCardProps[];
+  categories?: Array<{ name: string; count: number }>;
 }
 
-export function LandingPage({ chores = [] }: LandingPageProps) {
+export function LandingPage({ chores = [], categories }: LandingPageProps) {
   return (
     <div className="min-h-screen bg-background text-foreground">
       <main>
         <Hero />
         <SearchBar />
         <HowItWorks />
-        <FeaturedCategories />
+        <FeaturedCategories categories={categories} />
         <FeaturedChores chores={chores} />
         <TrustStrip />
         <Testimonials />

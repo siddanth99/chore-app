@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { ChoreStatus } from '@prisma/client'
 import { motion } from 'framer-motion'
@@ -20,6 +20,7 @@ import {
   CATEGORIES,
 } from '@/components/chores/LovableCreateChorePage'
 import { Leaf } from 'lucide-react'
+import { POPULAR_CATEGORIES } from '@/components/chores/categories'
 import { MapPin, AlertCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import {
@@ -68,7 +69,7 @@ export default function ChoreForm({ mode, initialChore }: ChoreFormProps) {
     dueAt: '',
   })
 
-  // Fetch categories on mount
+  // Fetch categories on mount (existing user-created categories)
   useEffect(() => {
     fetch('/api/categories')
       .then(res => res.json())
@@ -82,6 +83,45 @@ export default function ChoreForm({ mode, initialChore }: ChoreFormProps) {
         setCategories([])
       })
   }, [])
+
+  // Merge API categories with popular categories for dropdown
+  const mergedCategories = useMemo(() => {
+    // Normalize a label into an ID/slug
+    const normalizeId = (label: string) =>
+      label
+        .toLowerCase()
+        .trim()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+
+    // Collect labels from API + popular list, de-duplicated
+    const labels = Array.from(
+      new Set([
+        ...POPULAR_CATEGORIES,
+        ...categories.map((c) => c.label || c.id),
+      ]),
+    ).filter(Boolean) as string[]
+
+    // Map to objects expected by CategorySelect (with icons/colors when possible)
+    return labels.map((label) => {
+      const apiCat = categories.find(
+        (c) => c.label.toLowerCase() === label.toLowerCase() || c.id === label,
+      )
+      const id = apiCat?.id || normalizeId(label)
+      const match = CATEGORIES.find(
+        (cat) =>
+          cat.id === id ||
+          cat.id === normalizeId(label) ||
+          cat.label.toLowerCase() === label.toLowerCase(),
+      )
+      return {
+        id,
+        label,
+        icon: match?.icon || Leaf,
+        color: match?.color || 'text-muted-foreground',
+      }
+    })
+  }, [categories])
 
   // Pre-fill form when in edit mode
   useEffect(() => {
@@ -425,15 +465,8 @@ export default function ChoreForm({ mode, initialChore }: ChoreFormProps) {
               }
             }}
             disabled={categoryDisabled}
-            categories={categories.length > 0 ? categories.map(c => {
-              const match = CATEGORIES.find(cat => cat.id === c.id);
-              return {
-                id: c.id,
-                label: c.label,
-                icon: match?.icon || Leaf,
-                color: match?.color || 'text-muted-foreground',
-              };
-            }) : undefined}
+            // Provide merged categories (popular + API) for pills + dropdown
+            categories={mergedCategories}
           />
           {fieldErrors.category && (
             <motion.p

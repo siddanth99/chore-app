@@ -8,25 +8,31 @@ import { cn } from '@/lib/utils';
 import { normalizeKey, findCategoryByChore, type CategoryItem } from '../utils/category';
 import { parsePriceValue } from '@/lib/utils/filters';
 import ClientOnlyDate from '@/components/ui/ClientOnlyDate';
+import { getCategoryIcon } from '../categories';
 
 
 // Robust category lookup function
-function findCategoryForChore(chore: Chore | null | undefined, categories: CategoryItem[] = []) {
+function findCategoryForChore(chore: Chore | null | undefined, categories: CategoryItem[] = []): { id: string; label: string; icon: string } {
   // categories: [{id, label}, ...]
   // chore.category may be {id,label} or a string id or a label string
-  if (!chore) return categories[0] ?? { id: 'uncategorized', label: 'Uncategorized', icon: '📋' };
+  let categoryLabel = 'Uncategorized';
+  let categoryId = 'uncategorized';
+
+  if (!chore) {
+    return { id: categoryId, label: categoryLabel, icon: getCategoryIcon(categoryLabel) };
+  }
 
   // Check for categoryData property first (from transformed chores)
   if ((chore as any).categoryData) {
     const catData = (chore as any).categoryData;
     if (catData && typeof catData === 'object' && catData.id) {
       const found = categories.find(c => c.id === catData.id);
-      if (found) return found;
-      return {
-        id: catData.id,
-        label: catData.label ?? catData.name ?? catData.id,
-        icon: '📋'
-      };
+      if (found) {
+        return { id: found.id, label: found.label, icon: getCategoryIcon(found.label) };
+      }
+      categoryLabel = catData.label ?? catData.name ?? catData.id;
+      categoryId = catData.id;
+      return { id: categoryId, label: categoryLabel, icon: getCategoryIcon(categoryLabel) };
     }
   }
 
@@ -34,25 +40,40 @@ function findCategoryForChore(chore: Chore | null | undefined, categories: Categ
   const categoryValue = (chore as any).category;
   if (categoryValue && typeof categoryValue === 'object' && categoryValue.id) {
     const found = categories.find(c => c.id === categoryValue.id);
-    return found ?? { 
-      id: categoryValue.id, 
-      label: categoryValue.label ?? categoryValue.name ?? categoryValue.id,
-      icon: '📋'
-    };
+    if (found) {
+      return { id: found.id, label: found.label, icon: getCategoryIcon(found.label) };
+    }
+    categoryLabel = categoryValue.label ?? categoryValue.name ?? categoryValue.id;
+    categoryId = categoryValue.id;
+    return { id: categoryId, label: categoryLabel, icon: getCategoryIcon(categoryLabel) };
   }
 
   // if chore.category is string, try match id first
   if (typeof chore.category === 'string') {
     const byId = categories.find(c => c.id === chore.category);
-    if (byId) return byId;
+    if (byId) {
+      return { id: byId.id, label: byId.label, icon: getCategoryIcon(byId.label) };
+    }
 
     // try normalize by label
     const norm = (s?: string) => (s || '').toLowerCase().replace(/[^a-z0-9]+/g, '_');
     const byLabel = categories.find(c => norm(c.label) === norm(chore.category));
-    if (byLabel) return byLabel;
+    if (byLabel) {
+      return { id: byLabel.id, label: byLabel.label, icon: getCategoryIcon(byLabel.label) };
+    }
+    
+    // Use the category string as label and get icon for it
+    categoryLabel = chore.category;
+    categoryId = normalizeKey(chore.category);
+    return { id: categoryId, label: categoryLabel, icon: getCategoryIcon(categoryLabel) };
   }
 
-  return categories[0] ?? { id: 'uncategorized', label: 'Uncategorized', icon: '📋' };
+  const fallback = categories[0];
+  if (fallback) {
+    return { id: fallback.id, label: fallback.label, icon: getCategoryIcon(fallback.label) };
+  }
+
+  return { id: categoryId, label: categoryLabel, icon: getCategoryIcon(categoryLabel) };
 }
 
 interface EnhancedChoreCardProps {
@@ -103,15 +124,15 @@ export function EnhancedChoreCard({
     ? propCategories.map(c => ({
         id: c.id,
         label: c.label,
-        icon: typeof c.icon === 'string' ? c.icon : (c.icon || '📋'),
+        icon: typeof c.icon === 'string' ? c.icon : (c.icon || getCategoryIcon(c.label)),
       }))
     : CATEGORIES.map(c => ({
         id: c.id,
         label: c.label,
-        icon: c.icon,
+        icon: getCategoryIcon(c.label),
       }));
 
-  // Use robust category lookup
+  // Use robust category lookup (returns {id, label, icon} with icon as string emoji)
   const category = findCategoryForChore(chore, categoriesList);
   const statusLabel = chore.status === 'published' ? 'Open' : chore.status === 'in_progress' ? 'In Progress' : 'Done';
 
@@ -136,7 +157,7 @@ export function EnhancedChoreCard({
       >
         {/* Thumbnail or Avatar */}
         <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center flex-shrink-0">
-          <span className="text-xl">{typeof category.icon === 'string' ? category.icon : category.icon ? <category.icon className="w-5 h-5" /> : '📋'}</span>
+          <span className="text-xl">{category.icon}</span>
         </div>
 
         {/* Content */}
@@ -217,7 +238,7 @@ export function EnhancedChoreCard({
           {/* Category Badge on Image */}
           <div className="absolute top-3 left-3">
             <span className="px-3 py-1 rounded-full bg-card/80 backdrop-blur-sm text-sm font-medium flex items-center gap-1.5">
-              {typeof category.icon === 'string' ? <span>{category.icon}</span> : category.icon ? <category.icon className="w-4 h-4" /> : <span>📋</span>}
+              <span>{category.icon}</span>
               {category.label}
             </span>
           </div>
@@ -236,12 +257,12 @@ export function EnhancedChoreCard({
         </div>
       ) : (
         <div className="h-32 bg-gradient-to-br from-primary/10 via-accent/10 to-highlight/10 relative flex items-center justify-center">
-          <span className="text-4xl opacity-50">{typeof category.icon === 'string' ? category.icon : category.icon ? <category.icon className="w-8 h-8" /> : '📋'}</span>
+          <span className="text-4xl opacity-50">{category.icon}</span>
           
           {/* Category Badge */}
           <div className="absolute top-3 left-3">
             <span className="px-3 py-1 rounded-full bg-card/80 backdrop-blur-sm text-sm font-medium flex items-center gap-1.5">
-              {typeof category.icon === 'string' ? <span>{category.icon}</span> : category.icon ? <category.icon className="w-4 h-4" /> : <span>📋</span>}
+              <span>{category.icon}</span>
               {category.label}
             </span>
           </div>

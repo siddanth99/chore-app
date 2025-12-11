@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { getCategoryIcon } from '../chores/categories';
 
 export interface ChoreCardProps {
   id: string;
@@ -37,7 +38,8 @@ export function ChoreCard({
       >
         {/* Header */}
         <div className="flex items-start justify-between mb-3">
-          <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-secondary text-secondary-foreground">
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-secondary text-secondary-foreground">
+            <span>{getCategoryIcon(category)}</span>
             {category}
           </span>
           {urgent && (
