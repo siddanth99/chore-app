@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { UserRole, ChoreType } from '@prisma/client'
-import { requireRole, getCurrentUser, getHttpStatusForAuthError, isAuthError, AuthorizationError, AUTH_ERRORS } from '@/server/auth/role'
+import { getCurrentUser, getHttpStatusForAuthError, isAuthError, AuthorizationError, AUTH_ERRORS } from '@/server/auth/role'
 import { createChore, listPublishedChoresWithFilters, getUniqueCategories } from '@/server/api/chores'
 import { choreCreationLimiter, getRateLimitKey, createRateLimitResponse } from '@/lib/rate-limit'
 
@@ -32,11 +32,11 @@ export async function GET(request: NextRequest) {
       filters.category = category
     }
     
-    // Get current user to exclude their own chores if they're a worker
+    // Get current user (for future filtering if needed)
     const user = await getCurrentUser()
-    const excludeUserId = user?.role === 'WORKER' ? user.id : undefined
+    // Don't exclude user's own chores - role is UI-only, not permission-based
     
-    const chores = await listPublishedChoresWithFilters(filters, excludeUserId)
+    const chores = await listPublishedChoresWithFilters(filters, undefined)
     
     return NextResponse.json({ chores })
   } catch (error) {
@@ -50,12 +50,19 @@ export async function GET(request: NextRequest) {
 
 // GET /api/chores/categories -> get unique categories (separate endpoint would be cleaner but adding here for simplicity)
 
-// POST /api/chores -> create a new chore (CUSTOMER only)
+// POST /api/chores -> create a new chore
 // Validation is now handled by Zod in server/api/chores.ts
+// Role is UI-only, not permission-based - any authenticated user can create chores
 export async function POST(request: NextRequest) {
   try {
-    // RBAC: Only customers can create chores
-    const user = await requireRole(UserRole.CUSTOMER)
+    // Get authenticated user - any user can create chores regardless of role
+    const user = await getCurrentUser()
+    if (!user) {
+      return NextResponse.json(
+        { ok: false, error: 'Unauthorized' },
+        { status: 401 }
+      )
+    }
 
     // Rate limiting: Prevent spam chore creation
     const rateLimitKey = getRateLimitKey(request, user.id)

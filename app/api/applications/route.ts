@@ -1,17 +1,22 @@
 import { NextResponse } from 'next/server'
-import { UserRole } from '@prisma/client'
-import { requireRole, getHttpStatusForAuthError, isAuthError } from '@/server/auth/role'
+import { getCurrentUser, getHttpStatusForAuthError, isAuthError } from '@/server/auth/role'
 import { listApplicationsForWorkerDashboard } from '@/server/api/applications'
 
 /**
  * GET /api/applications
- * Returns the current worker's OWN applications
- * Security: workerId always comes from session - never allows viewing other workers' applications
+ * Returns the current user's OWN applications
+ * Role is UI-only, not permission-based - any authenticated user can view their applications
  */
 export async function GET() {
   try {
-    // RBAC: Only workers can view applications
-    const user = await requireRole(UserRole.WORKER)
+    // Any authenticated user can view their own applications regardless of role
+    const user = await getCurrentUser()
+    if (!user) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      )
+    }
 
     // Security: Only returns applications for the session user
     const applications = await listApplicationsForWorkerDashboard(user.id)

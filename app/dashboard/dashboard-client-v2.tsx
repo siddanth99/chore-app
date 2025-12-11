@@ -147,8 +147,9 @@ export default function DashboardClientV2({ user, role, data }: DashboardClientV
   const { data: session, update } = useSession()
   const [isUpdatingRole, setIsUpdatingRole] = useState(false)
   
-  // Store role in a variable that preserves the union type for toggle buttons
-  const currentRole: UserRole = role
+  // Use role from session (single source of truth) instead of prop
+  // This ensures consistency across all client components
+  const currentRole: UserRole = (session?.user as any)?.role || role
 
   // TODO: Fetch notifications from API or pass via props
   // For now, using placeholder data

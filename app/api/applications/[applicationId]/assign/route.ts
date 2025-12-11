@@ -1,7 +1,6 @@
 // web/app/api/applications/[applicationId]/assign/route.ts
 import { NextResponse } from 'next/server'
-import { UserRole } from '@prisma/client'
-import { requireRole, getHttpStatusForAuthError, isAuthError } from '@/server/auth/role'
+import { getCurrentUser, getHttpStatusForAuthError, isAuthError } from '@/server/auth/role'
 import { assignApplication } from '@/server/api/applications'
 
 // In Next 15, params is a Promise
@@ -9,16 +8,22 @@ type AssignParams = Promise<{ applicationId: string }>
 
 /**
  * POST /api/applications/[applicationId]/assign
- * Assign a worker to a chore (CUSTOMER only)
- * Security: customerId always comes from session
+ * Assign a worker to a chore
+ * Role is UI-only - any authenticated user who owns the chore can assign
  */
 export async function POST(
   request: Request,
   { params }: { params: AssignParams }
 ) {
   try {
-    // RBAC: Only customers can assign
-    const user = await requireRole(UserRole.CUSTOMER)
+    // Any authenticated user can assign if they own the chore (ownership check happens in assignApplication)
+    const user = await getCurrentUser()
+    if (!user) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      )
+    }
 
     const { applicationId } = await params
 

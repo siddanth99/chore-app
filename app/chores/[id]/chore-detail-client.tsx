@@ -74,13 +74,15 @@ export default function ChoreDetailClient({
   const [choreRating, setChoreRating] = useState<any>(null)
   const [loadingRatings, setLoadingRatings] = useState(false)
 
-  const isOwner =
-    currentUser && currentUser.role === 'CUSTOMER' && chore.createdById === currentUser.id
-  const isWorker = currentUser && currentUser.role === 'WORKER'
+  // Determine ownership-based behavior (ignore global role toggle for this page)
+  // Owner = can manage applications (customer view)
+  // Non-owner = can apply/withdraw (worker view)
+  const isOwner = currentUser && chore.createdById === currentUser.id
+  const isNotOwner = currentUser && chore.createdById !== currentUser.id
   const isAssignedWorker = currentUser && chore.assignedWorkerId === currentUser.id
 
-  // Find worker's application if they're a worker
-  const workerApplication = isWorker
+  // Find user's application if they've applied (for non-owners)
+  const workerApplication = isNotOwner
     ? applications?.find((app) => app.workerId === currentUser?.id)
     : null
 
@@ -88,14 +90,13 @@ export default function ChoreDetailClient({
   const isAssignedToSomeoneElse =
     !!chore.assignedWorkerId && chore.assignedWorkerId !== currentUser?.id
 
-  // Worker can apply only if:
+  // Non-owner can apply if:
   // - logged in
-  // - role = WORKER
   // - chore is PUBLISHED
   // - no worker assigned yet
-  // - worker hasn't already applied
+  // - user hasn't already applied
   const canApply =
-    isWorker &&
+    isNotOwner &&
     choreStatus === 'PUBLISHED' &&
     !chore.assignedWorkerId &&
     !hasApplied
@@ -480,7 +481,7 @@ export default function ChoreDetailClient({
       <div className="mx-auto max-w-4xl">
         {/* Status debug line */}
         <div className="mb-2 text-xs text-slate-500 dark:text-slate-400">
-          Status: {choreStatus} | You are: {currentUser?.role ?? 'Guest'}
+          Status: {choreStatus} | View: {isOwner ? 'Owner' : isNotOwner ? 'Applicant' : 'Guest'}
         </div>
 
         {/* Back button - source aware */}
@@ -697,8 +698,8 @@ export default function ChoreDetailClient({
           </Card>
         )}
 
-        {/* Worker: Assigned to someone else - hide apply UI */}
-        {isWorker && isAssignedToSomeoneElse && (
+        {/* Non-owner: Assigned to someone else - hide apply UI */}
+        {isNotOwner && isAssignedToSomeoneElse && (
           <Card className="mb-6 border-2 border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900/20">
             <p className="text-sm text-slate-700 dark:text-slate-300">
               This chore has been assigned to another worker.
@@ -706,8 +707,8 @@ export default function ChoreDetailClient({
           </Card>
         )}
 
-        {/* Worker: Already applied - Show application summary */}
-        {isWorker && hasApplied && !isAssignedWorker && workerApplication && (
+        {/* Non-owner: Already applied - Show application summary */}
+        {isNotOwner && hasApplied && !isAssignedWorker && workerApplication && (
           <Card className="mb-6 border-2 border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20">
             <div className="flex items-start gap-4">
               <div className="flex-shrink-0 p-3 rounded-xl bg-emerald-100 dark:bg-emerald-800/50">
@@ -1052,9 +1053,8 @@ export default function ChoreDetailClient({
             </Card>
         )}
 
-        {/* Rating Form - Only for CUSTOMER after COMPLETED */}
+        {/* Rating Form - Only for owner after COMPLETED */}
         {currentUser &&
-          currentUser.role === 'CUSTOMER' &&
           isOwner &&
           choreStatus === 'COMPLETED' &&
           !hasRated && (
@@ -1114,10 +1114,9 @@ export default function ChoreDetailClient({
               </Card>
           )}
 
-        {/* Rating info message - show when COMPLETED but user is not customer */}
+        {/* Rating info message - show when COMPLETED but user is not owner */}
         {choreStatus === 'COMPLETED' &&
           currentUser &&
-          currentUser.role !== 'CUSTOMER' &&
           !isOwner && (
             <Card className="mb-6">
               <h2 className="mb-2 text-xl font-semibold text-slate-900 dark:text-slate-50">Rating</h2>

@@ -1,11 +1,11 @@
 import { redirect } from 'next/navigation'
-import { requireRole } from '@/server/auth/role'
+import { getCurrentUser } from '@/server/auth/role'
 import ChoreForm from './chore-form'
 
 export default async function NewChorePage() {
-  try {
-    await requireRole('CUSTOMER')
-  } catch (error) {
+  // Role is UI-only - any authenticated user can create chores
+  const user = await getCurrentUser()
+  if (!user) {
     redirect('/signin')
   }
 

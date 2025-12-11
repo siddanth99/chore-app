@@ -307,7 +307,12 @@ function SignInPageContent() {
 
                 {/* Password */}
                 <div>
-                  <label htmlFor="password" className="block text-sm font-medium mb-2">Password</label>
+                  <div className="flex items-center justify-between mb-2">
+                    <label htmlFor="password" className="block text-sm font-medium">Password</label>
+                    <Link href="/forgot-password" className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 transition-colors">
+                      Forgot password?
+                    </Link>
+                  </div>
                   <div className="relative">
                     <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                     <input

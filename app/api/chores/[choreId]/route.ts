@@ -38,16 +38,8 @@ export async function PATCH(
       return NextResponse.json({ error: 'Chore not found' }, { status: 404 })
     }
 
-    // RBAC: Only the chore owner (CUSTOMER) can edit
-    // Note: Workers cannot edit chores, only view them
-    if (user.role !== UserRole.CUSTOMER) {
-      return NextResponse.json(
-        { error: 'Only customers can edit chores' },
-        { status: 403 }
-      )
-    }
-    
-    // RBAC: Assert ownership using the helper
+    // Role is UI-only - only check ownership, not role
+    // Any authenticated user who owns the chore can edit it
     assertOwner(user.id, chore.createdById)
 
     // Build allowed update data based on status

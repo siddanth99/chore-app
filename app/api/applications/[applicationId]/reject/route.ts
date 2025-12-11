@@ -1,7 +1,7 @@
 // web/app/api/applications/[applicationId]/reject/route.ts
 import { NextResponse } from 'next/server'
-import { UserRole, ApplicationStatus } from '@prisma/client'
-import { requireRole, getHttpStatusForAuthError, isAuthError, AuthorizationError, AUTH_ERRORS } from '@/server/auth/role'
+import { ApplicationStatus } from '@prisma/client'
+import { getCurrentUser, getHttpStatusForAuthError, isAuthError, AuthorizationError, AUTH_ERRORS } from '@/server/auth/role'
 import { prisma } from '@/server/db/client'
 import { createNotification } from '@/server/api/notifications'
 import { NotificationType } from '@prisma/client'
@@ -11,16 +11,22 @@ type RejectParams = Promise<{ applicationId: string }>
 
 /**
  * POST /api/applications/[applicationId]/reject
- * Reject an application (CUSTOMER only)
- * Security: customerId always comes from session
+ * Reject an application
+ * Role is UI-only - any authenticated user who owns the chore can reject
  */
 export async function POST(
   request: Request,
   { params }: { params: RejectParams }
 ) {
   try {
-    // RBAC: Only customers can reject applications
-    const user = await requireRole(UserRole.CUSTOMER)
+    // Any authenticated user can reject if they own the chore (ownership check below)
+    const user = await getCurrentUser()
+    if (!user) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      )
+    }
 
     const { applicationId } = await params
 
