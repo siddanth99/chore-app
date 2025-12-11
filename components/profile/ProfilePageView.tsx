@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import Link from 'next/link'
@@ -136,13 +136,23 @@ export default function ProfilePageView({
   stats,
 }: ProfilePageViewProps) {
   const router = useRouter()
-  const { update } = useSession()
+  const { data: session, update } = useSession()
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [currentProfile, setCurrentProfile] = useState(profile)
   const [isUpdatingRole, setIsUpdatingRole] = useState(false)
 
-  const isWorker = currentProfile.role === 'WORKER'
-  const currentRole = currentProfile.role as 'CUSTOMER' | 'WORKER'
+  // Use role from session (single source of truth) instead of profile prop
+  // This ensures consistency across all client components
+  const sessionRole = (session?.user as any)?.role as 'CUSTOMER' | 'WORKER' | undefined
+  const currentRole = sessionRole || (currentProfile.role as 'CUSTOMER' | 'WORKER')
+  const isWorker = currentRole === 'WORKER'
+  
+  // Sync profile state when session role changes
+  useEffect(() => {
+    if (sessionRole && sessionRole !== currentProfile.role) {
+      setCurrentProfile(prev => ({ ...prev, role: sessionRole }))
+    }
+  }, [sessionRole, currentProfile.role])
 
   const handleRoleToggle = async (newRole: 'CUSTOMER' | 'WORKER') => {
     if (newRole === currentRole || isUpdatingRole) return
@@ -163,13 +173,7 @@ export default function ProfilePageView({
         return
       }
 
-      // Update local profile state
-      setCurrentProfile({
-        ...currentProfile,
-        role: newRole,
-      })
-
-      // Update the session to reflect the new role
+      // Update the session to reflect the new role - this will update all components
       await update()
       // Refresh the page to load the correct data
       router.refresh()

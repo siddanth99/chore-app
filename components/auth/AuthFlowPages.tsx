@@ -16,6 +16,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { 
   Mail, 
   Lock, 
@@ -208,13 +209,37 @@ function AuthLayout({
 export function ForgotPasswordPage() {
   const [email, setEmail] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError('');
+    setSuccess(false);
     setIsLoading(true);
-    // TODO: Replace with actual API call
-    console.log('Forgot password submitted:', { email });
-    setTimeout(() => setIsLoading(false), 1500);
+
+    try {
+      const response = await fetch('/api/auth/forgot-password', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setError(data.error || 'Failed to send reset link. Please try again.');
+        return;
+      }
+
+      setSuccess(true);
+    } catch (err) {
+      setError('An error occurred. Please check your connection and try again.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -240,53 +265,79 @@ export function ForgotPasswordPage() {
           </p>
         </div>
 
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="space-y-5">
-          {/* Email */}
-          <div>
-            <label htmlFor="forgot-email" className="block text-sm font-medium text-foreground mb-2">
-              Email address
-            </label>
-            <div className="relative">
-              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-              <input
-                id="forgot-email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@example.com"
-                required
-                className="w-full pl-11 pr-4 py-3 rounded-xl bg-secondary/50 border border-input text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-all"
-                aria-label="Email address"
-              />
-            </div>
-            <p className="text-xs text-muted-foreground mt-2">
-              We'll never share your contact details with anyone.
+        {/* Success Message */}
+        {success && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-6 p-4 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800"
+          >
+            <p className="text-sm text-emerald-800 dark:text-emerald-200">
+              ✓ Check your email! We've sent a password reset link to <strong>{email}</strong>
             </p>
-          </div>
-
-          {/* Submit Button */}
-          <motion.div whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }}>
-            <Button
-              type="submit"
-              disabled={isLoading}
-              className="w-full py-6 text-base font-semibold rounded-xl bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary text-primary-foreground shadow-lg shadow-primary/25 transition-all"
-            >
-              {isLoading ? (
-                <motion.div
-                  animate={{ rotate: 360 }}
-                  transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-                  className="w-5 h-5 border-2 border-primary-foreground border-t-transparent rounded-full"
-                />
-              ) : (
-                <>
-                  Send reset link
-                  <ArrowRight className="w-5 h-5 ml-2" />
-                </>
-              )}
-            </Button>
           </motion.div>
-        </form>
+        )}
+
+        {/* Error Message */}
+        {error && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-6 p-4 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive text-sm"
+          >
+            {error}
+          </motion.div>
+        )}
+
+        {/* Form */}
+        {!success && (
+          <form onSubmit={handleSubmit} className="space-y-5">
+            {/* Email */}
+            <div>
+              <label htmlFor="forgot-email" className="block text-sm font-medium text-foreground mb-2">
+                Email address
+              </label>
+              <div className="relative">
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                <input
+                  id="forgot-email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="you@example.com"
+                  required
+                  className="w-full pl-11 pr-4 py-3 rounded-xl bg-secondary/50 border border-input text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-all"
+                  aria-label="Email address"
+                />
+              </div>
+              <p className="text-xs text-muted-foreground mt-2">
+                We'll never share your contact details with anyone.
+              </p>
+            </div>
+
+            {/* Submit Button */}
+            <motion.div whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }}>
+              <Button
+                type="submit"
+                disabled={isLoading}
+                className="w-full py-6 text-base font-semibold rounded-xl bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary text-primary-foreground shadow-lg shadow-primary/25 transition-all"
+              >
+                {isLoading ? (
+                  <motion.div
+                    animate={{ rotate: 360 }}
+                    transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+                    className="w-5 h-5 border-2 border-primary-foreground border-t-transparent rounded-full"
+                  />
+                ) : (
+                  <>
+                    Send reset link
+                    <ArrowRight className="w-5 h-5 ml-2" />
+                  </>
+                )}
+              </Button>
+            </motion.div>
+          </form>
+        )}
 
         {/* Back to Sign In */}
         <div className="mt-8 text-center">
@@ -464,11 +515,23 @@ export function OtpVerificationPage() {
 // 3. RESET PASSWORD PAGE
 // ============================================
 export function ResetPasswordPage() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const token = searchParams.get('token');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState(false);
+
+  // Check if token is present
+  useEffect(() => {
+    if (!token) {
+      setError('Invalid or missing reset token. Please request a new password reset link.');
+    }
+  }, [token]);
 
   // Simple password strength calculation (UI only)
   const getPasswordStrength = (pwd: string) => {
@@ -481,12 +544,43 @@ export function ResetPasswordPage() {
   const strength = getPasswordStrength(password);
   const passwordsMatch = password === confirmPassword && confirmPassword !== '';
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError('');
     setIsLoading(true);
-    // TODO: Replace with actual API call
-    console.log('Reset password submitted:', { password, confirmPassword });
-    setTimeout(() => setIsLoading(false), 1500);
+
+    if (!token) {
+      setError('Invalid or missing reset token.');
+      setIsLoading(false);
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/auth/reset-password', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ token, password }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setError(data.error || 'Failed to reset password. Please try again.');
+        return;
+      }
+
+      setSuccess(true);
+      // Redirect to signin after a short delay
+      setTimeout(() => {
+        router.push('/signin?reset=success');
+      }, 2000);
+    } catch (err) {
+      setError('An error occurred. Please check your connection and try again.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -512,8 +606,33 @@ export function ResetPasswordPage() {
           </p>
         </div>
 
+        {/* Error Message */}
+        {error && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-6 p-4 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive text-sm"
+          >
+            {error}
+          </motion.div>
+        )}
+
+        {/* Success Message */}
+        {success && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-6 p-4 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800"
+          >
+            <p className="text-sm text-emerald-800 dark:text-emerald-200">
+              ✓ Password reset successful! Redirecting to sign in...
+            </p>
+          </motion.div>
+        )}
+
         {/* Form */}
-        <form onSubmit={handleSubmit} className="space-y-5">
+        {!success && (
+          <form onSubmit={handleSubmit} className="space-y-5">
           {/* New Password */}
           <div>
             <label htmlFor="new-password" className="block text-sm font-medium text-foreground mb-2">
@@ -613,7 +732,7 @@ export function ResetPasswordPage() {
           <motion.div whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }}>
             <Button
               type="submit"
-              disabled={isLoading || !passwordsMatch}
+              disabled={isLoading || !passwordsMatch || !token}
               className="w-full py-6 text-base font-semibold rounded-xl bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary text-primary-foreground shadow-lg shadow-primary/25 transition-all disabled:opacity-50"
             >
               {isLoading ? (
@@ -631,6 +750,7 @@ export function ResetPasswordPage() {
             </Button>
           </motion.div>
         </form>
+        )}
 
         {/* Back to Sign In */}
         <div className="mt-8 text-center">

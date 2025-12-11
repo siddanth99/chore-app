@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireRole, getHttpStatusForAuthError, isAuthError, AuthorizationError, AUTH_ERRORS } from '@/server/auth/role'
-import { UserRole } from '@prisma/client'
+import { getCurrentUser, getHttpStatusForAuthError, isAuthError, AuthorizationError, AUTH_ERRORS } from '@/server/auth/role'
 import { createApplication } from '@/server/api/applications'
 import { applicationCreationLimiter, getRateLimitKey, createRateLimitResponse } from '@/lib/rate-limit'
 
@@ -10,8 +9,14 @@ export async function POST(
   context: { params: Promise<{ choreId: string }> }
 ) {
   try {
-    // RBAC: Only workers can apply to chores
-    const user = await requireRole(UserRole.WORKER)
+    // Role is UI-only, not permission-based - any authenticated user can apply to chores
+    const user = await getCurrentUser()
+    if (!user) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      )
+    }
 
     // Rate limiting: Prevent spam applications
     const rateLimitKey = getRateLimitKey(request, user.id)

@@ -22,44 +22,31 @@ export default function Navbar() {
               ChoreMarket
             </Link>
             <div className="hidden md:flex gap-6">
-              {/* Worker-specific "Find Work" link */}
-              {userRole === 'WORKER' && (
-                <Link
-                  href="/chores"
-                  className="flex items-center gap-1.5 text-emerald-600 hover:text-emerald-500 font-semibold dark:text-emerald-400 dark:hover:text-emerald-300 transition-colors"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                    <circle cx="11" cy="11" r="8" />
-                    <path d="m21 21-4.35-4.35" />
-                  </svg>
-                  Find Work
-                </Link>
-              )}
-              {/* Generic browse for non-workers */}
-              {userRole !== 'WORKER' && (
-                <Link
-                  href="/chores"
-                  className="text-slate-700 hover:text-blue-600 font-medium dark:text-slate-300 dark:hover:text-blue-400 transition-colors"
-                >
-                  Browse Chores
-                </Link>
-              )}
+              {/* Browse Chores - always visible */}
+              <Link
+                href="/chores"
+                className="text-slate-700 hover:text-blue-600 font-medium dark:text-slate-300 dark:hover:text-blue-400 transition-colors"
+              >
+                Browse Chores
+              </Link>
               {session && (
-                <Link
-                  href="/dashboard"
-                  className="text-slate-700 hover:text-blue-600 font-medium dark:text-slate-300 dark:hover:text-blue-400 transition-colors"
-                >
-                  Dashboard
-                </Link>
-              )}
-              {/* Worker-specific "My Applications" link */}
-              {userRole === 'WORKER' && (
-                <Link
-                  href="/applications"
-                  className="text-slate-700 hover:text-blue-600 font-medium dark:text-slate-300 dark:hover:text-blue-400 transition-colors"
-                >
-                  My Applications
-                </Link>
+                <>
+                  <Link
+                    href="/dashboard"
+                    className="text-slate-700 hover:text-blue-600 font-medium dark:text-slate-300 dark:hover:text-blue-400 transition-colors"
+                  >
+                    Dashboard
+                  </Link>
+                  {/* My Applications - shown based on role for UI convenience */}
+                  {userRole === 'WORKER' && (
+                    <Link
+                      href="/applications"
+                      className="text-slate-700 hover:text-blue-600 font-medium dark:text-slate-300 dark:hover:text-blue-400 transition-colors"
+                    >
+                      My Applications
+                    </Link>
+                  )}
+                </>
               )}
             </div>
           </div>

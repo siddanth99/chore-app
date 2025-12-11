@@ -3,6 +3,9 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Menu, X, Plus, Sparkles } from 'lucide-react';
+import { useSession } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
+import { UserRole } from '@prisma/client';
 import { ChoreFiltersSidebar } from './filters/ChoreFiltersSidebar';
 import { EnhancedChoreCard } from './cards/EnhancedChoreCard';
 import { SortDropdown } from './ui/SortDropdown';
@@ -11,7 +14,6 @@ import { ChoresSkeletonGrid } from './ui/ChoresSkeletonGrid';
 import { FiltersChipsBar } from './filters/FiltersChipsBar';
 import { ViewToggle } from './ui/ViewToggle';
 import MapPlaceholder from './ui/MapPlaceholder';
-import { useRouter } from 'next/navigation';
 import { Chore, Filters, SortOption, ViewMode } from './types';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -78,6 +80,11 @@ export function BrowseChoresPageEnhanced({
 }: BrowseChoresPageEnhancedProps) {
   const router = useRouter();
   const { info } = useToast();
+  const { data: session, update } = useSession();
+  const [isUpdatingRole, setIsUpdatingRole] = useState(false);
+  
+  // Get current role from session
+  const currentRole = (session?.user as any)?.role as UserRole | undefined;
 
   // Local state
   const [sortBy, setSortBy] = useState<SortOption>('newest');
@@ -169,6 +176,37 @@ export function BrowseChoresPageEnhanced({
       console.log('Post new chore');
     }
   }, [externalOnPostChore]);
+
+  // Handle role toggle
+  const handleRoleToggle = useCallback(async (newRole: UserRole) => {
+    if (newRole === currentRole || isUpdatingRole || !currentRole) return;
+
+    setIsUpdatingRole(true);
+    try {
+      const response = await fetch('/api/profile/role', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ role: newRole }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        console.error('Failed to update role:', data.error);
+        return;
+      }
+
+      // Update the session to reflect the new role
+      await update();
+      // Refresh the page to load the correct data
+      router.refresh();
+    } catch (error) {
+      console.error('Error updating role:', error);
+    } finally {
+      setIsUpdatingRole(false);
+    }
+  }, [currentRole, isUpdatingRole, update, router]);
 
   // Keep server-rendered count stable to avoid hydration mismatch:
   // - initialTotalCount is rendered on server
@@ -327,7 +365,36 @@ export function BrowseChoresPageEnhanced({
                 initial={{ opacity: 0, x: 20 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: 0.2 }}
+                className="flex items-center gap-3"
               >
+                {/* Role Toggle - only show if user is logged in */}
+                {session && currentRole && (
+                  <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-border bg-card">
+                    <button
+                      onClick={() => handleRoleToggle(UserRole.CUSTOMER)}
+                      disabled={isUpdatingRole}
+                      className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
+                        currentRole === UserRole.CUSTOMER
+                          ? 'bg-primary text-primary-foreground'
+                          : 'text-muted-foreground hover:text-foreground'
+                      } ${isUpdatingRole ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    >
+                      Customer
+                    </button>
+                    <div className="h-4 w-px bg-border" />
+                    <button
+                      onClick={() => handleRoleToggle(UserRole.WORKER)}
+                      disabled={isUpdatingRole}
+                      className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
+                        currentRole === UserRole.WORKER
+                          ? 'bg-primary text-primary-foreground'
+                          : 'text-muted-foreground hover:text-foreground'
+                      } ${isUpdatingRole ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    >
+                      Worker
+                    </button>
+                  </div>
+                )}
                 <Button
                   onClick={handlePostChore}
                   className="gap-2 bg-primary hover:bg-primary/90 shadow-glow"

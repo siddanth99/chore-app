@@ -62,15 +62,15 @@ export default async function ChoresPage({
   }
 
   const user = await getCurrentUser()
-  const excludeUserId = user?.role === 'WORKER' ? user.id : undefined
+  // Don't exclude user's own chores - role is UI-only, not permission-based
 
   // Parse distance params
   const workerLat = resolved.workerLat ? parseFloat(resolved.workerLat) : NaN
   const workerLng = resolved.workerLng ? parseFloat(resolved.workerLng) : NaN
   const distanceKm = resolved.distanceKm ? parseFloat(resolved.distanceKm) : NaN
 
+  // Distance filter can be active for any user (not just WORKER role)
   const isDistanceFilterActive =
-    user?.role === 'WORKER' &&
     !Number.isNaN(workerLat) &&
     !Number.isNaN(workerLng) &&
     !Number.isNaN(distanceKm) &&
@@ -83,8 +83,8 @@ export default async function ChoresPage({
   // Fetch chores and categories in parallel
   const [chores, categoriesFromDb] = await Promise.all([
     isDistanceFilterActive
-      ? getChoresWithinDistance(workerLat, workerLng, distanceKm, excludeUserId)
-      : listPublishedChoresWithFilters(serverFilters, excludeUserId),
+      ? getChoresWithinDistance(workerLat, workerLng, distanceKm, undefined)
+      : listPublishedChoresWithFilters(serverFilters, undefined),
     getUniqueCategories(),
   ])
 

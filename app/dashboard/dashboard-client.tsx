@@ -21,11 +21,12 @@ interface DashboardClientProps {
 
 export default function DashboardClient({ user, role, data }: DashboardClientProps) {
   const router = useRouter()
-  const { update } = useSession()
+  const { data: session, update } = useSession()
   const [isUpdatingRole, setIsUpdatingRole] = useState(false)
   
-  // Store role in a variable that preserves the union type for toggle buttons
-  const currentRole = role
+  // Use role from session (single source of truth) instead of prop
+  // This ensures consistency across all client components
+  const currentRole = (session?.user as any)?.role || role
 
   const handleRoleToggle = async (newRole: 'CUSTOMER' | 'WORKER') => {
     if (newRole === currentRole || isUpdatingRole) return

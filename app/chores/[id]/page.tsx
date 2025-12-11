@@ -36,13 +36,10 @@ export default async function ChoreDetailPage(props: {
     )
   }
 
-  // Load applications if user is the owner (customer who created the chore)
+  // Load applications if user is the owner (regardless of their global role)
+  // Role is UI-only, ownership determines chore detail behavior
   let applications = null
-  if (
-    user &&
-    user.role === 'CUSTOMER' &&
-    chore.createdById === user.id
-  ) {
+  if (user && chore.createdById === user.id) {
     try {
       applications = await listApplicationsForChore(chore.id, user.id)
       // Ratings are now included in listApplicationsForChore response
