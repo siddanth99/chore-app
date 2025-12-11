@@ -218,9 +218,9 @@ const tileUrl = useMemo(() => (isDark ? darkUrl : lightUrl), [isDark])
     popupAnchor: [0, -12],
   })
 
-  // Wrapper classes
+  // Wrapper classes - ensure z-0 for proper stacking
   const wrapper = (className && className.trim())
-    ? className
+    ? `${className} relative z-0`
     : 'w-full h-full min-h-[350px] md:min-h-[420px] relative z-0 rounded-2xl overflow-hidden shadow-lg animate-fade-in'
 
   return (

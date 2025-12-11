@@ -1,0 +1,5 @@
+This file is a placeholder. 
+Please replace public/og.png with a proper 1200x630 PNG image 
+for Open Graph and Twitter card previews.
+
+Recommended: Include the ChoreBid logo and tagline.

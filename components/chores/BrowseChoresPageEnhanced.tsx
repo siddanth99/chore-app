@@ -37,6 +37,7 @@ interface BrowseChoresPageEnhancedProps {
   serverCategories?: Array<{ id: string; label: string }>;
   initialCount?: number;
   initialTotalCount?: number;
+  onFiltersApplied?: () => void; // Callback when filters are applied via Apply button
 }
 
 /**
@@ -77,6 +78,7 @@ export function BrowseChoresPageEnhanced({
   initialTotalCount,
   categories,
   serverCategories = categories,
+  onFiltersApplied,
 }: BrowseChoresPageEnhancedProps) {
   const router = useRouter();
   const { info } = useToast();
@@ -343,8 +345,8 @@ const choreCategory = rawCategory.toLowerCase().trim();
   return (
     <div className="min-h-screen bg-background text-foreground transition-colors duration-300">
       <main className="pt-8">
-        {/* Hero Header */}
-        <section className="relative overflow-hidden py-8 sm:py-12">
+          {/* Hero Header */}
+        <section className="relative overflow-hidden py-4 md:py-8 sm:py-12">
           {/* Animated background */}
           <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-accent/5" />
           <motion.div
@@ -358,13 +360,13 @@ const choreCategory = rawCategory.toLowerCase().trim();
             transition={{ duration: 8, repeat: Infinity, delay: 1 }}
           />
 
-          <div className="container max-w-7xl mx-auto px-4 sm:px-6 relative">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div className="container max-w-7xl mx-auto px-4 md:px-6 relative">
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
               <div>
                 <motion.h1
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="text-3xl sm:text-4xl font-bold text-foreground"
+                  className="text-2xl md:text-3xl lg:text-4xl font-bold text-foreground"
                 >
                   Browse Chores
                 </motion.h1>
@@ -394,15 +396,15 @@ const choreCategory = rawCategory.toLowerCase().trim();
                 initial={{ opacity: 0, x: 20 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: 0.2 }}
-                className="flex items-center gap-3"
+                className="flex items-center gap-2 md:gap-3 flex-wrap"
               >
-                {/* Role Toggle - only show if user is logged in */}
+                {/* Role Toggle - only show if user is logged in, hide on mobile */}
                 {session && currentRole && (
-                  <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-border bg-card">
+                  <div className="hidden sm:flex items-center gap-2 px-2 md:px-3 py-1 md:py-1.5 rounded-lg border border-border bg-card">
                     <button
                       onClick={() => handleRoleToggle(UserRole.CUSTOMER)}
                       disabled={isUpdatingRole}
-                      className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
+                      className={`px-2 md:px-3 py-1 rounded text-xs md:text-sm font-medium transition-colors ${
                         currentRole === UserRole.CUSTOMER
                           ? 'bg-primary text-primary-foreground'
                           : 'text-muted-foreground hover:text-foreground'
@@ -414,7 +416,7 @@ const choreCategory = rawCategory.toLowerCase().trim();
                     <button
                       onClick={() => handleRoleToggle(UserRole.WORKER)}
                       disabled={isUpdatingRole}
-                      className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
+                      className={`px-2 md:px-3 py-1 rounded text-xs md:text-sm font-medium transition-colors ${
                         currentRole === UserRole.WORKER
                           ? 'bg-primary text-primary-foreground'
                           : 'text-muted-foreground hover:text-foreground'
@@ -426,10 +428,11 @@ const choreCategory = rawCategory.toLowerCase().trim();
                 )}
                 <Button
                   onClick={handlePostChore}
-                  className="gap-2 bg-primary hover:bg-primary/90 shadow-glow"
+                  className="gap-2 bg-primary hover:bg-primary/90 shadow-glow text-xs md:text-sm px-3 md:px-4 py-2"
                 >
-                  <Plus className="w-4 h-4" />
-                  Post a Chore
+                  <Plus className="w-3 h-3 md:w-4 md:h-4" />
+                  <span className="hidden sm:inline">Post a Chore</span>
+                  <span className="sm:hidden">Post</span>
                 </Button>
               </motion.div>
             </div>
@@ -437,21 +440,73 @@ const choreCategory = rawCategory.toLowerCase().trim();
         </section>
 
         {/* Main Content */}
-        <div className="container max-w-7xl mx-auto px-4 sm:px-6 py-6">
-          {/* Controls Bar */}
-          <div className="flex items-center justify-between gap-4 mb-6">
-            {/* Mobile Filter Toggle */}
-            <button
-              onClick={() => setIsMobileFilterOpen(true)}
-              className="lg:hidden flex items-center gap-2 px-4 py-2.5 rounded-xl bg-secondary/50 text-sm font-medium"
-              aria-label="Open filters"
-            >
-              <Menu className="w-4 h-4" />
-              Filters
-            </button>
+        <div className="container max-w-7xl mx-auto px-4 py-3 md:px-6 md:py-6">
+          {/* Mobile: Search Bar + Filters Button */}
+          <div className="mb-4 md:hidden">
+            <div className="flex items-center gap-2 mb-3">
+              {/* Search Input - Full Width on Mobile */}
+              <div className="flex-1 relative">
+                <input
+                  type="text"
+                  placeholder="Search chores..."
+                  value={filters.q || ''}
+                  onChange={(e) => onFiltersChange({ ...filters, q: e.target.value })}
+                  className="w-full px-4 py-2.5 rounded-lg border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                />
+              </div>
+              {/* Filters Button */}
+              <button
+                onClick={() => setIsMobileFilterOpen(true)}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-secondary text-sm font-medium hover:bg-secondary/80 transition-colors"
+                aria-label="Open filters"
+              >
+                <Menu className="w-4 h-4" />
+                Filters
+              </button>
+            </div>
+            {/* View Toggle & Sort on Mobile */}
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1 rounded-lg bg-secondary/50 p-1 flex-1">
+                <button
+                  className={`flex-1 px-2 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                    viewMode === 'grid' 
+                      ? 'bg-primary text-primary-foreground' 
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                  onClick={() => setViewMode('grid')}
+                >
+                  Tiles
+                </button>
+                <button
+                  className={`flex-1 px-2 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                    viewMode === 'list' 
+                      ? 'bg-primary text-primary-foreground' 
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                  onClick={() => setViewMode('list')}
+                >
+                  List
+                </button>
+                <button
+                  className={`flex-1 px-2 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                    viewMode === 'map' 
+                      ? 'bg-primary text-primary-foreground' 
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                  onClick={() => setViewMode('map')}
+                >
+                  Map
+                </button>
+              </div>
+              <div className="flex-shrink-0">
+                <SortDropdown value={sortBy} onChange={setSortBy} />
+              </div>
+            </div>
+          </div>
 
+          {/* Desktop: Controls Bar */}
+          <div className="hidden md:flex items-center justify-between gap-4 mb-6">
             <div className="flex-1" />
-
             {/* View Toggle & Sort */}
             <div className="flex items-center gap-3">
               <div className="flex items-center gap-2 rounded-lg bg-secondary/50 p-1">
@@ -490,19 +545,19 @@ const choreCategory = rawCategory.toLowerCase().trim();
             </div>
           </div>
 
-          {/* Filters Chips Bar */}
+          {/* Filters Chips Bar - Show below search on mobile */}
           <FiltersChipsBar
             filters={filters}
             onRemove={handleRemoveFilter}
             onClearAll={handleClearAllFilters}
           />
 
-          {/* Two-column Layout */}
+          {/* Mobile-first Layout: Single column on mobile, two-column on desktop */}
           <div className={cn(
-            'flex gap-8',
-            viewMode === 'map' && 'flex-col lg:flex-row'
+            'flex flex-col gap-4 md:flex-row md:gap-8',
+            viewMode === 'map' && 'md:flex-col lg:flex-row'
           )}>
-            {/* Sidebar (Desktop) */}
+            {/* Sidebar (Desktop only) */}
             <div className="hidden lg:block flex-shrink-0">
               <ChoreFiltersSidebar
                 filters={filters}
@@ -510,6 +565,9 @@ const choreCategory = rawCategory.toLowerCase().trim();
                 viewMode={viewMode}
                 clearFilters={clearFilters}
                 categories={serverCategories}
+                onApply={() => {
+                  // Desktop filters apply immediately (live updating)
+                }}
               />
             </div>
 
@@ -529,7 +587,7 @@ const choreCategory = rawCategory.toLowerCase().trim();
                     animate={{ x: 0 }}
                     exit={{ x: '-100%' }}
                     transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-                    className="fixed inset-y-0 left-0 w-80 max-w-[90vw] z-50 lg:hidden"
+                    className="fixed inset-y-0 left-0 w-80 max-w-[90vw] z-50 lg:hidden bg-background border-r border-border shadow-xl"
                   >
                     <ChoreFiltersSidebar
                       filters={filters}
@@ -539,17 +597,19 @@ const choreCategory = rawCategory.toLowerCase().trim();
                       viewMode={viewMode}
                       clearFilters={clearFilters}
                       categories={serverCategories}
+                      onApply={onFiltersApplied}
                     />
                   </motion.div>
                 </>
               )}
             </AnimatePresence>
 
-            {/* Main Content Area */}
+            {/* Main Content Area - Full width on mobile, flex-1 on desktop */}
             <div className="flex-1 min-w-0 min-h-[500px]">
               {viewMode === "map" ? (
                 <>
-                  <div className="w-full h-[350px] md:h-[420px]">
+                  {/* Map View: Map first, then list below */}
+                  <div className="w-full h-[220px] md:h-[350px] lg:h-[420px] relative z-0 rounded-lg overflow-hidden border border-border">
                     <MapPlaceholder 
                       chores={visibleChoresInRadius ?? []} 
                       visibleChoresInRadius={visibleChoresInRadius}
@@ -562,7 +622,7 @@ const choreCategory = rawCategory.toLowerCase().trim();
                   
                   {/* Chores list below map */}
                   <div className="mt-4">
-                    <h3 className="font-medium mb-3">Chores within {filters.radius ?? 0} km — {visibleChoresInRadius?.length ?? 0}</h3>
+                    <h3 className="font-medium mb-3 text-sm md:text-base">Chores within {filters.radius ?? 0} km — {visibleChoresInRadius?.length ?? 0}</h3>
                     <ul className="space-y-3">
                       {(!visibleChoresInRadius || visibleChoresInRadius.length === 0) ? (
                         <li className="p-4 text-sm text-muted-foreground text-center">
@@ -576,17 +636,17 @@ const choreCategory = rawCategory.toLowerCase().trim();
                             <li 
                               key={c.id} 
                               onClick={() => router.push(`/chores/${c.id}?from=chores&view=${viewMode}`)} 
-                              className="cursor-pointer py-3 px-3 rounded-lg bg-card hover:shadow transition-shadow"
+                              className="cursor-pointer py-3 px-3 rounded-lg bg-card hover:shadow transition-shadow border border-border"
                             >
-                              <div className="flex justify-between">
+                              <div className="flex justify-between gap-2">
                                 <div className="flex-1 min-w-0">
-                                  <div className="font-semibold truncate">{c.title}</div>
-                                  <div className="text-sm text-muted-foreground truncate">
+                                  <div className="font-semibold truncate text-sm md:text-base">{c.title}</div>
+                                  <div className="text-xs md:text-sm text-muted-foreground truncate">
                                     {c.location || 'Location not specified'}
                                     {distanceLabel && <> • {distanceLabel}</>}
                                   </div>
                                 </div>
-                                <div className="text-right ml-4 flex-shrink-0">
+                                <div className="text-right ml-2 flex-shrink-0 text-sm md:text-base font-semibold">
                                   {formatINR(c.budget ?? (c as any).price ?? (c as any).quote ?? (c as any).amount) || '—'}
                                 </div>
                               </div>
@@ -605,7 +665,8 @@ const choreCategory = rawCategory.toLowerCase().trim();
                   onPostChore={handlePostChore}
                 />
               ) : viewMode === 'list' ? (
-                <div className="space-y-4">
+                // List view: Single column on mobile, comfortable spacing
+                <div className="space-y-3 md:space-y-4">
                   {filteredChores?.map((chore, i) => (
                     <EnhancedChoreCard
                       key={chore.id}
@@ -618,8 +679,8 @@ const choreCategory = rawCategory.toLowerCase().trim();
                   ))}
                 </div>
               ) : (
-                // Grid/Tiles view (default)
-                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6">
+                // Grid/Tiles view: Single column on mobile, grid on desktop
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 md:gap-6">
                   {filteredChores?.map((chore, i) => (
                     <EnhancedChoreCard
                       key={chore.id}

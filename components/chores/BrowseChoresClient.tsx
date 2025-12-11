@@ -3,7 +3,7 @@
 import { BrowseChoresPageEnhanced } from './BrowseChoresPageEnhanced';
 import { Chore, Filters } from './types';
 import { useRouter } from 'next/navigation';
-import React, { useEffect, useMemo, useState, useRef } from 'react';
+import React, { useEffect, useMemo, useState, useRef, useCallback } from 'react';
 import useUserLocation from '@/lib/hooks/useUserLocation';
 import { haversineDistanceKm } from '@/lib/utils/distance';
 import { priceWithinRange } from '@/lib/utils/filters';
@@ -331,120 +331,75 @@ export function BrowseChoresClient(props: BrowseChoresClientProps) {
     return Array.from(merged.values());
   }, [categoriesFromChores, props.initialCategories]);
 
-  // --- robust "No chores found" guard ---
+  // --- "No chores found" toast - only show when filters are intentionally applied ---
+  
+  const [hasAppliedFilters, setHasAppliedFilters] = useState(false);
+  const previousChoresCount = useRef<number | null>(null);
+  const filtersAppliedRef = useRef(false);
 
-  // constants
-  const NO_CHORES_TOAST_GLOBAL_KEY = '__CHORE_NO_TOAST_GLOBAL';
-  const TOAST_COOLDOWN_MS = 5000; // minimal cooldown between toasts for same filter
-  const TOAST_DURATION_MS = 6000;
-
-  // keep last filters snapshot so we only show again when filters actually change
-  const lastNoChoresFilterRef = useRef<string | null>(null);
-  // timestamp of last shown toast
-  const lastNoChoresShownAt = useRef<number | null>(null);
-
-  // ensure global guard exists
-  if (
-    typeof window !== 'undefined' &&
-    !(window as any)[NO_CHORES_TOAST_GLOBAL_KEY]
-  ) {
-    (window as any)[NO_CHORES_TOAST_GLOBAL_KEY] = { showingFor: null, ts: 0 };
-  }
-
+  // Track when filters change via Apply button
   useEffect(() => {
-    const empty =
-      Array.isArray(visibleChoresInRadius) && visibleChoresInRadius.length === 0;
+    // Reset the applied flag when filters actually change from user action
+    // This will be set to true when Apply is clicked in mobile filters
+    // For desktop, filters apply immediately so we don't need special handling
+  }, [filters]);
 
-    // serialize the important parts of filters that determine result
-    // choose only the keys that affect the results (radius, categories, q, type, status, nearMe)
-    const filtersSnapshot = JSON.stringify({
-      radius: filters.radius,
-      categories: filters.categories || [],
-      q: filters.q || '',
-      type: filters.type || 'all',
-      status: filters.status || [],
-      nearMe: !!filters.nearMe,
-    });
+  // Show toast only when filters were intentionally applied and result is empty
+  useEffect(() => {
+    // Only show toast if we're in map view with radius filtering
+    if (viewMode !== 'map' || !filters.radius || filters.radius <= 0) {
+      return;
+    }
 
-    const now = Date.now();
-    const global =
-      typeof window !== 'undefined'
-        ? (window as any)[NO_CHORES_TOAST_GLOBAL_KEY]
-        : { showingFor: null, ts: 0 };
-
-    if (empty) {
-      const lastShown = lastNoChoresShownAt.current ?? 0;
-
-      // only show if:
-      // - this filtersSnapshot differs from the one that last produced a toast (prevents rerenders)
-      // - AND cooldown has elapsed since last show (prevents rapid repeat)
-      if (
-        lastNoChoresFilterRef.current !== filtersSnapshot ||
-        now - lastShown > TOAST_COOLDOWN_MS
-      ) {
-        // if a global toast for chores is currently showing for the same snapshot, don't create another
-        if (
-          global.showingFor === filtersSnapshot &&
-          now - global.ts < TOAST_DURATION_MS + 1000
-        ) {
-          // there is already a global toast for this same filter; skip
-        } else {
-          // show toast with stable id to help toast library dedupe
-          const toastId = `no-chores-${btoa(filtersSnapshot).slice(0, 12)}`; // unique-ish per filters
+    const currentCount = visibleChoresInRadius?.length ?? 0;
+    
+    // Only show toast if:
+    // 1. Filters were intentionally applied (hasAppliedFilters or filtersAppliedRef)
+    // 2. Current count is 0
+    // 3. Previous count was > 0 (transitioned from some to none)
+    // OR it's the first time checking after applying filters
+    if (hasAppliedFilters || filtersAppliedRef.current) {
+      if (currentCount === 0) {
+        const shouldShow = previousChoresCount.current === null || 
+                          (previousChoresCount.current !== null && previousChoresCount.current > 0);
+        
+        if (shouldShow) {
           toast(`No chores found within ${filters.radius} km — try increasing radius.`, {
-            id: toastId,
             icon: 'ℹ️',
-            duration: TOAST_DURATION_MS,
+            duration: 4000,
           });
-          lastNoChoresFilterRef.current = filtersSnapshot;
-          lastNoChoresShownAt.current = now;
-          // update global guard
-          if (typeof window !== 'undefined') {
-            (window as any)[NO_CHORES_TOAST_GLOBAL_KEY] = {
-              showingFor: filtersSnapshot,
-              ts: now,
-            };
-          }
         }
       }
-    } else {
-      // results exist — dismiss any toasts for the previous snapshot(s)
-      try {
-        // attempt to dismiss the specific last toast id if we created it
-        if (lastNoChoresFilterRef.current) {
-          const toastId = `no-chores-${btoa(
-            lastNoChoresFilterRef.current,
-          ).slice(0, 12)}`;
-          toast.dismiss(toastId);
-        }
-        // reset refs & global state
-        lastNoChoresFilterRef.current = null;
-        lastNoChoresShownAt.current = null;
-        if (typeof window !== 'undefined') {
-          (window as any)[NO_CHORES_TOAST_GLOBAL_KEY] = { showingFor: null, ts: 0 };
-        }
-      } catch (e) {
-        // ignore errors
+      
+      // Reset the flag after showing toast once
+      if (currentCount === 0) {
+        setHasAppliedFilters(false);
+        filtersAppliedRef.current = false;
       }
     }
-    // only depend on visibleChoresInRadius and the specific filter keys we serialized
-  }, [
-    visibleChoresInRadius,
-    filters.radius,
-    // ✅ FIX: these are now single entries, not spread arrays
-    JSON.stringify(filters.categories ?? []),
-    filters.q,
-    filters.type,
-    JSON.stringify(filters.status ?? []),
-    filters.nearMe,
-  ]);
+    
+    previousChoresCount.current = currentCount;
+  }, [visibleChoresInRadius, viewMode, filters.radius, hasAppliedFilters]);
+
+  // Expose function to mark filters as applied (for mobile Apply button)
+  const handleFiltersApplied = useCallback(() => {
+    setHasAppliedFilters(true);
+    filtersAppliedRef.current = true;
+  }, []);
+
+  // Create a wrapper for onFiltersChange that can track Apply button clicks
+  const handleFiltersChange = useCallback((f: Filters) => {
+    setFilters(f as typeof filters);
+    // Don't set hasAppliedFilters here - only when Apply button is clicked
+    // Desktop filters update live, mobile uses Apply button
+  }, []);
 
   return (
     <BrowseChoresPageEnhanced
       chores={filteredChores}
       visibleChoresInRadius={visibleChoresInRadius}
       filters={filters}
-      onFiltersChange={(f: Filters) => setFilters(f as typeof filters)}
+      onFiltersChange={handleFiltersChange}
       clearFilters={clearFilters}
       userPosition={userPos}
       userLocationError={userError}
@@ -455,6 +410,7 @@ export function BrowseChoresClient(props: BrowseChoresClientProps) {
       categories={serverCategories}
       initialCount={props.initialCount}
       initialTotalCount={props.initialChores?.length ?? 0}
+      onFiltersApplied={handleFiltersApplied}
     />
   );
 }

@@ -95,7 +95,7 @@ const FiltersChipsBarStable: React.FC<{
 
   // base classes always present on server and client
   const containerClassBase =
-    'flex flex-wrap items-center gap-2 mb-6 sticky top-20 z-10 py-2 bg-background/80 backdrop-blur-sm';
+    'flex flex-wrap items-center gap-2 mb-4 md:mb-6 sticky top-16 md:top-20 z-10 py-2 bg-background/80 backdrop-blur-sm -mx-4 px-4 md:mx-0';
   // mounted toggles a visual class only
   const mountedClass = mounted ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-1';
   const containerClass = `${containerClassBase} ${mountedClass}`;
