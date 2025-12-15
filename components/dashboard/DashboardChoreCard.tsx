@@ -2,7 +2,7 @@
 // See components/dashboard/LovableDashboardChoreCard.tsx for the new Lovable UI implementation.
 
 import Link from 'next/link'
-import { formatDate } from '@/lib/utils'
+import { formatDate, cn } from '@/lib/utils'
 import { ChoreStatus, ChoreType } from '@prisma/client'
 import Badge from '@/components/ui/Badge'
 import Card from '@/components/ui/Card'
@@ -140,6 +140,24 @@ export default function DashboardChoreCard({
             <div className="flex items-center text-sm text-slate-500 dark:text-slate-400">
               <span className="font-medium">Budget:</span>
               <span className="ml-2">₹{chore.budget}</span>
+            </div>
+          )}
+
+          {chore.paymentStatus && (
+            <div className="flex items-center text-sm">
+              <span className="font-medium text-slate-500 dark:text-slate-400">Payment:</span>
+              <span className={cn(
+                "ml-2 font-medium",
+                chore.paymentStatus === 'FUNDED' && "text-green-600 dark:text-green-400",
+                chore.paymentStatus === 'PENDING' && "text-yellow-600 dark:text-yellow-400",
+                chore.paymentStatus === 'UNPAID' && "text-red-600 dark:text-red-400",
+                chore.paymentStatus === 'REFUNDED' && "text-gray-600 dark:text-gray-400"
+              )}>
+                {chore.paymentStatus === 'FUNDED' && 'Paid ✔ (funded)'}
+                {chore.paymentStatus === 'PENDING' && 'Payment Pending...'}
+                {chore.paymentStatus === 'UNPAID' && 'Unpaid'}
+                {chore.paymentStatus === 'REFUNDED' && 'Refunded'}
+              </span>
             </div>
           )}
 

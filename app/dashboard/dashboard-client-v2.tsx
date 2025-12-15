@@ -248,6 +248,49 @@ export default function DashboardClientV2({ user, role, data }: DashboardClientV
               </div>
             </div>
 
+            {/* Payout Onboarding Warning */}
+            {!user.razorpayAccountId && (
+              <div className="mb-6 p-4 rounded-xl bg-yellow-50 dark:bg-yellow-900/20 border-2 border-yellow-200 dark:border-yellow-800">
+                <div className="flex items-start gap-3">
+                  <svg
+                    className="w-5 h-5 text-yellow-600 dark:text-yellow-400 mt-0.5 flex-shrink-0"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"
+                    />
+                  </svg>
+                  <div className="flex-1">
+                    <h3 className="font-semibold text-yellow-900 dark:text-yellow-100 mb-1">
+                      Payout Onboarding Required
+                    </h3>
+                    <p className="text-sm text-yellow-800 dark:text-yellow-200 mb-3">
+                      You must enable payouts before you can be assigned to jobs. Complete payout setup to start receiving payments.
+                    </p>
+                    <Link href="/dashboard/payouts/setup">
+                      <Button variant="primary" size="sm">
+                        Enable Payouts
+                      </Button>
+                    </Link>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Mock Mode Indicator (only if onboarded) */}
+            {user.razorpayAccountId && user.razorpayAccountId.startsWith('acc_mock_') && (
+              <div className="mb-6 p-3 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
+                <p className="text-sm text-blue-800 dark:text-blue-200">
+                  ⚠️ Test mode: Payouts are simulated. No real money is moved.
+                </p>
+              </div>
+            )}
+
             {/* Stats Grid - Maps workerData.stats → StatCard components */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <StatCard

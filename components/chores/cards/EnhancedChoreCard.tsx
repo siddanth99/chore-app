@@ -318,15 +318,33 @@ export function EnhancedChoreCard({
             {formatPrice(chore, chore.currency)}
           </span>
 
-          {/* Type Badge */}
-          <span className={cn(
-            'px-2 md:px-3 py-1 rounded-full text-[10px] md:text-xs font-medium flex-shrink-0',
-            chore.type === 'online'
-              ? 'bg-primary/20 text-primary'
-              : 'bg-secondary text-secondary-foreground'
-          )}>
-            {chore.type === 'online' ? 'Online' : 'Offline'}
-          </span>
+          <div className="flex items-center gap-2">
+            {/* Payment Status Badge */}
+            {chore.paymentStatus && (
+              <span className={cn(
+                'px-2 md:px-3 py-1 rounded-full text-[10px] md:text-xs font-medium flex-shrink-0',
+                chore.paymentStatus === 'FUNDED' && 'bg-green-500/20 text-green-600 dark:text-green-400',
+                chore.paymentStatus === 'PENDING' && 'bg-yellow-500/20 text-yellow-600 dark:text-yellow-400',
+                chore.paymentStatus === 'UNPAID' && 'bg-red-500/20 text-red-600 dark:text-red-400',
+                chore.paymentStatus === 'REFUNDED' && 'bg-gray-500/20 text-gray-600 dark:text-gray-400'
+              )}>
+                {chore.paymentStatus === 'FUNDED' && 'Paid ✔'}
+                {chore.paymentStatus === 'PENDING' && 'Payment Pending...'}
+                {chore.paymentStatus === 'UNPAID' && 'Unpaid'}
+                {chore.paymentStatus === 'REFUNDED' && 'Refunded'}
+              </span>
+            )}
+
+            {/* Type Badge */}
+            <span className={cn(
+              'px-2 md:px-3 py-1 rounded-full text-[10px] md:text-xs font-medium flex-shrink-0',
+              chore.type === 'online'
+                ? 'bg-primary/20 text-primary'
+                : 'bg-secondary text-secondary-foreground'
+            )}>
+              {chore.type === 'online' ? 'Online' : 'Offline'}
+            </span>
+          </div>
         </div>
 
         {/* Hover CTA */}

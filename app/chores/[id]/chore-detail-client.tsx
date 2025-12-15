@@ -10,6 +10,7 @@ import Button from '@/components/ui/button'
 import Badge from '@/components/ui/Badge'
 import Card from '@/components/ui/Card'
 import { formatDate } from '@/lib/utils'
+import { cn } from '@/lib/utils'
 import CustomerApplicationsPanel from '@/components/applications/CustomerApplicationsPanel'
 import { useToast } from '@/components/ui/toast'
 
@@ -92,12 +93,12 @@ export default function ChoreDetailClient({
 
   // Non-owner can apply if:
   // - logged in
-  // - chore is PUBLISHED
+  // - chore is OPEN (new state machine)
   // - no worker assigned yet
   // - user hasn't already applied
   const canApply =
     isNotOwner &&
-    choreStatus === 'PUBLISHED' &&
+    (choreStatus === 'OPEN' || choreStatus === 'PUBLISHED') && // Support both old and new statuses
     !chore.assignedWorkerId &&
     !hasApplied
 
@@ -250,6 +251,121 @@ export default function ChoreDetailClient({
       setLoading(false)
     }
   }
+
+  const handlePayForChore = async () => {
+    if (!chore.budget || typeof window === 'undefined' || !(window as any).Razorpay) {
+      setError('Razorpay SDK not loaded. Please refresh the page and try again.');
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+    setSuccess('');
+
+    try {
+      // Step 1: Create order
+      const orderResponse = await fetch('/api/payments/create-order', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          amount: chore.budget, // rupees
+          choreId: chore.id,
+          notes: { choreId: chore.id, source: 'chore-detail-page' },
+        }),
+      });
+
+      if (!orderResponse.ok) {
+        const errorText = await orderResponse.text();
+        console.error('Failed to create order:', {
+          status: orderResponse.status,
+          statusText: orderResponse.statusText,
+          response: errorText,
+        });
+        setError('Failed to create payment order. Please try again.');
+        setLoading(false);
+        return;
+      }
+
+      const { orderId, amount, currency } = await orderResponse.json();
+
+      // Step 2: Configure Razorpay options
+      const options = {
+        key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
+        amount, // already in paise from backend
+        currency, // "INR"
+        order_id: orderId,
+        name: 'ChoreBid',
+        description: `Payment for: ${chore.title}`,
+        prefill: {
+          name: currentUser?.name || 'Customer',
+          email: currentUser?.email || '',
+        },
+        theme: {
+          color: '#4F46E5',
+        },
+        handler: async function (response: any) {
+          try {
+            // Step 3: Verify payment signature
+            const verifyResponse = await fetch('/api/payments/verify', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                razorpay_order_id: response.razorpay_order_id,
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_signature: response.razorpay_signature,
+              }),
+            });
+
+            if (!verifyResponse.ok) {
+              const errorText = await verifyResponse.text();
+              console.error('Failed to verify payment:', {
+                status: verifyResponse.status,
+                statusText: verifyResponse.statusText,
+                response: errorText,
+              });
+              setError('Payment verification failed. Please contact support.');
+              setLoading(false);
+              return;
+            }
+
+            const verifyData = await verifyResponse.json();
+
+            if (verifyData.success) {
+              setSuccess('Payment successful! Your chore is now funded.');
+              // Refresh the page to show updated payment status
+              router.refresh();
+            } else {
+              setError(`Payment verification failed: ${verifyData.error || 'Unknown error'}`);
+            }
+          } catch (error) {
+            console.error('Verification error:', error);
+            setError('Error verifying payment');
+          } finally {
+            setLoading(false);
+          }
+        },
+        modal: {
+          ondismiss: function () {
+            setSuccess('');
+            setError('Payment cancelled');
+            setLoading(false);
+          },
+        },
+      };
+
+      // Step 4: Open Razorpay checkout
+      const razorpay = new (window as any).Razorpay(options);
+      razorpay.open();
+    } catch (error) {
+      console.error('Payment error:', error);
+      setError('An error occurred while processing payment');
+      setLoading(false);
+    }
+  };
 
   const handleStatusUpdate = async (action: 'start' | 'complete') => {
     setLoading(true)
@@ -585,6 +701,37 @@ export default function ChoreDetailClient({
                     <p className="mt-1 text-slate-700 dark:text-slate-300">₹{chore.budget}</p>
                   </div>
                 )}
+                {chore.paymentStatus && (
+                  <div>
+                    <h3 className="text-sm font-medium text-slate-500 dark:text-slate-400">Payment Status</h3>
+                    <p className={cn(
+                      "mt-1 font-medium",
+                      chore.paymentStatus === 'FUNDED' && "text-green-600 dark:text-green-400",
+                      chore.paymentStatus === 'PENDING' && "text-yellow-600 dark:text-yellow-400",
+                      chore.paymentStatus === 'UNPAID' && "text-red-600 dark:text-red-400",
+                      chore.paymentStatus === 'REFUNDED' && "text-gray-600 dark:text-gray-400"
+                    )}>
+                      {chore.paymentStatus === 'FUNDED' && 'Paid ✔ (funded)'}
+                      {chore.paymentStatus === 'PENDING' && 'Payment Pending...'}
+                      {chore.paymentStatus === 'UNPAID' && 'Unpaid'}
+                      {chore.paymentStatus === 'REFUNDED' && 'Refunded'}
+                    </p>
+                  </div>
+                )}
+                {/* Owner: Pay for Chore button */}
+                {isOwner && chore.budget && chore.paymentStatus !== 'FUNDED' && chore.paymentStatus !== 'PENDING' && (
+                  <div>
+                    <h3 className="text-sm font-medium text-slate-500 dark:text-slate-400 mb-2">Fund This Chore</h3>
+                    <Button
+                      onClick={handlePayForChore}
+                      disabled={loading}
+                      variant="primary"
+                      className="w-full sm:w-auto"
+                    >
+                      {loading ? 'Processing...' : `Pay ₹${chore.budget.toLocaleString('en-IN')}`}
+                    </Button>
+                  </div>
+                )}
                 {chore.dueAt && (
                   <div>
                     <h3 className="text-sm font-medium text-slate-500 dark:text-slate-400">Due Date</h3>
@@ -689,11 +836,81 @@ export default function ChoreDetailClient({
           </div>
         )}
 
-        {/* Worker: Assigned to this worker */}
-        {isAssignedWorker && (
+        {/* Worker: Status messages based on chore status */}
+        {isAssignedWorker && choreStatus === 'ASSIGNED' && chore.paymentStatus !== 'FUNDED' && (
+          <Card className="mb-6 border-2 border-yellow-200 dark:border-yellow-800 bg-yellow-50 dark:bg-yellow-900/20">
+            <p className="text-sm text-slate-700 dark:text-slate-300 font-medium">
+              You were assigned this job. Waiting for client payment to start.
+            </p>
+          </Card>
+        )}
+        {isAssignedWorker && choreStatus === 'FUNDED' && (
           <Card className="mb-6 border-2 border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/20">
-            <p className="text-sm text-slate-700 dark:text-slate-300">
-              You are assigned to this chore.
+            <p className="text-sm text-slate-700 dark:text-slate-300 font-medium mb-3">
+              ✔ Escrow Funded - You can now start the job
+            </p>
+            <Button
+              onClick={async () => {
+                try {
+                  const response = await fetch(`/api/chores/${chore.id}/start`, {
+                    method: 'POST',
+                  })
+                  if (response.ok) {
+                    toast.success('Job started', 'You have started working on this chore.')
+                    router.refresh()
+                  } else {
+                    const data = await response.json()
+                    toast.error('Failed to start', data.error || 'Please try again.')
+                  }
+                } catch (error) {
+                  toast.error('Error', 'Failed to start chore.')
+                }
+              }}
+              variant="primary"
+            >
+              Start Job
+            </Button>
+          </Card>
+        )}
+        {isAssignedWorker && choreStatus === 'IN_PROGRESS' && (
+          <Card className="mb-6 border-2 border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20">
+            <p className="text-sm text-slate-700 dark:text-slate-300 font-medium mb-3">
+              Job in progress - Mark as complete when finished
+            </p>
+            <Button
+              onClick={async () => {
+                try {
+                  const response = await fetch(`/api/chores/${chore.id}/complete`, {
+                    method: 'POST',
+                  })
+                  if (response.ok) {
+                    toast.success('Job completed', 'Waiting for client approval.')
+                    router.refresh()
+                  } else {
+                    const data = await response.json()
+                    toast.error('Failed to complete', data.error || 'Please try again.')
+                  }
+                } catch (error) {
+                  toast.error('Error', 'Failed to mark chore as complete.')
+                }
+              }}
+              variant="primary"
+            >
+              Mark as Complete
+            </Button>
+          </Card>
+        )}
+        {isAssignedWorker && choreStatus === 'COMPLETED' && (
+          <Card className="mb-6 border-2 border-purple-200 dark:border-purple-800 bg-purple-50 dark:bg-purple-900/20">
+            <p className="text-sm text-slate-700 dark:text-slate-300 font-medium">
+              ✔ Job completed - Awaiting client approval and payment release
+            </p>
+          </Card>
+        )}
+        {isAssignedWorker && choreStatus === 'CLOSED' && (
+          <Card className="mb-6 border-2 border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900/20">
+            <p className="text-sm text-slate-700 dark:text-slate-300 font-medium">
+              ✔ Job completed - Payment released
             </p>
           </Card>
         )}
@@ -889,6 +1106,7 @@ export default function ChoreDetailClient({
             applications={applications}
             choreId={chore.id}
             choreStatus={choreStatus}
+            assignedWorkerId={chore.assignedWorkerId}
           />
         )}
 

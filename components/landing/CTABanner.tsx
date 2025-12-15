@@ -20,7 +20,7 @@ export function CTABanner() {
   return (
     <section className="py-16 sm:py-24 relative overflow-hidden">
       {/* Background */}
-      <div className="absolute inset-0 bg-gradient-to-r from-primary to-accent opacity-90" />
+      <div className="absolute inset-0 bg-gradient-to-r from-primary via-primary/90 to-accent" />
       <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxnIGZpbGw9IiNmZmYiIGZpbGwtb3BhY2l0eT0iMC4xIj48cGF0aCBkPSJNMzYgMzRjMC0yLjIxLTEuNzktNC00LTRzLTQgMS43OS00IDQgMS43OSA0IDQgNCA0LTEuNzkgNC00eiIvPjwvZz48L2c+PC9zdmc+')] opacity-20" />
       
       <div className="container relative mx-auto px-4 sm:px-6 lg:px-8 text-center">
@@ -34,7 +34,7 @@ export function CTABanner() {
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Button
               size="lg"
-              className="inline-flex items-center gap-3 px-6 py-3 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold shadow-lg focus:outline-none focus:ring-2 focus:ring-indigo-400 z-40 relative hero-primary-cta"
+              className="inline-flex items-center gap-3 px-6 py-3 rounded-lg bg-gradient-to-r from-primary to-accent hover:from-primary/90 hover:to-accent/90 text-white font-semibold shadow-lg focus:outline-none focus:ring-2 focus:ring-primary/50 z-40 relative hero-primary-cta border-0"
               onClick={handlePostChore}
               aria-label="Post your first chore"
             >

@@ -12,38 +12,43 @@ datasource db {
 
 // User model with role-based access
 model User {
-  id             String   @id @default(cuid())
-  name           String
-  email          String   @unique
-  hashedPassword String?
-  role           UserRole @default(CUSTOMER)
-  bio            String?
-  avatarUrl      String?
-  baseLocation   String?
-  phone          String?
-  skills         Json?    @default("[]")  // JSON array of skill strings
-  hourlyRate     Int?                      // Hourly rate in rupees
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id                 String    @id @default(cuid())
+  name               String
+  email              String    @unique
+  hashedPassword     String?
+  role               UserRole  @default(CUSTOMER)
+  bio                String?
+  avatarUrl          String?
+  baseLocation       String?
+  phone              String?
+  skills             Json?     @default("[]") // JSON array of skill strings
+  hourlyRate         Int? // Hourly rate in rupees
+  razorpayAccountId  String? // Razorpay Route sub-account ID (acc_xxxxx)
+  upiId              String? // UPI ID for payouts
+  payoutOnboardingAt DateTime? // When worker completed payout onboarding
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 
   // Relations
-  createdChores         Chore[]                @relation("ChoreCreator")
-  assignedChores        Chore[]                @relation("ChoreWorker")
-  applications          Application[]
-  ratingsGiven          Rating[]               @relation("RatingFrom")
-  ratingsReceived       Rating[]               @relation("RatingTo")
-  sentMessages          ChatMessage[]          @relation("MessageFrom")
-  receivedMessages      ChatMessage[]          @relation("MessageTo")
-  cancellationRequests  CancellationRequest[]
-  paymentsFrom          Payment[]              @relation("PaymentFrom")
-  paymentsTo            Payment[]              @relation("PaymentTo")
-  notifications         Notification[]
+  createdChores          Chore[]                     @relation("ChoreCreator")
+  assignedChores         Chore[]                     @relation("ChoreWorker")
+  applications           Application[]
+  ratingsGiven           Rating[]                    @relation("RatingFrom")
+  ratingsReceived        Rating[]                    @relation("RatingTo")
+  sentMessages           ChatMessage[]               @relation("MessageFrom")
+  receivedMessages       ChatMessage[]               @relation("MessageTo")
+  cancellationRequests   CancellationRequest[]
+  paymentsFrom           Payment[]                   @relation("PaymentFrom")
+  paymentsTo             Payment[]                   @relation("PaymentTo")
+  razorpayPayments       RazorpayPayment[]           @relation("UserRazorpayPayments")
+  notifications          Notification[]
   notificationPreference UserNotificationPreference?
   notificationDeliveries NotificationDelivery[]
 
   // NextAuth relations
   accounts Account[]
   sessions Session[]
+  Dispute  Dispute[]
 
   @@map("users")
 }
@@ -56,15 +61,15 @@ enum UserRole {
 
 // Chore model
 model Chore {
-  id               String      @id @default(cuid())
+  id               String             @id @default(cuid())
   title            String
   description      String
   type             ChoreType
-  status           ChoreStatus @default(DRAFT)
+  status           ChoreStatus        @default(OPEN)
   category         String
   budget           Int?
   agreedPrice      Int?
-  paymentStatus    ChorePaymentStatus @default(NONE)
+  paymentStatus    ChorePaymentStatus @default(UNPAID)
   imageUrl         String?
   locationAddress  String?
   locationLat      Float?
@@ -72,18 +77,24 @@ model Chore {
   dueAt            DateTime?
   createdById      String
   assignedWorkerId String?
-  createdAt        DateTime    @default(now())
-  updatedAt        DateTime    @updatedAt
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  assignedAt       DateTime?
+  startedAt        DateTime?
+  completedAt      DateTime?
+  closedAt         DateTime?
 
   // Relations
-  createdBy            User                 @relation("ChoreCreator", fields: [createdById], references: [id], onDelete: Cascade)
-  assignedWorker       User?                @relation("ChoreWorker", fields: [assignedWorkerId], references: [id])
+  createdBy            User                  @relation("ChoreCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  assignedWorker       User?                 @relation("ChoreWorker", fields: [assignedWorkerId], references: [id])
   applications         Application[]
   ratings              Rating[]
   messages             ChatMessage[]
   cancellationRequests CancellationRequest[]
   payments             Payment[]
+  razorpayPayments     RazorpayPayment[]     @relation("ChoreRazorpayPayments")
   notifications        Notification[]
+  disputes             Dispute[]
 
   @@map("chores")
 }
@@ -94,11 +105,17 @@ enum ChoreType {
 }
 
 enum ChoreStatus {
+  OPEN // Posted, waiting for worker applications
+  ASSIGNED // Client selected one worker
+  FUNDED // Client paid, escrow funded
+  IN_PROGRESS // Worker has begun the job
+  COMPLETED // Worker marked job complete
+  CLIENT_REVIEW // Client is reviewing completion
+  CLOSED // Payment released to worker
+  CANCELED // Chore cancelled (refund logic)
+  // Legacy statuses (keeping for backward compatibility)
   DRAFT
   PUBLISHED
-  ASSIGNED
-  IN_PROGRESS
-  COMPLETED
   CANCELLATION_REQUESTED
   CANCELLED
 }
@@ -115,8 +132,8 @@ model Application {
   updatedAt DateTime          @updatedAt
 
   // Relations
-  chore  Chore @relation(fields: [choreId], references: [id], onDelete: Cascade)
-  worker User  @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  chore         Chore          @relation(fields: [choreId], references: [id], onDelete: Cascade)
+  worker        User           @relation(fields: [workerId], references: [id], onDelete: Cascade)
   notifications Notification[]
 
   @@unique([choreId, workerId])
@@ -226,44 +243,46 @@ enum PaymentMethod {
 }
 
 enum ChorePaymentStatus {
-  NONE
-  CUSTOMER_PARTIAL
-  CUSTOMER_PAID
-  SETTLED
+  UNPAID
+  PENDING
+  FUNDED
+  REFUNDED
 }
 
 model CancellationRequest {
-  id             String                     @id @default(cuid())
+  id             String                    @id @default(cuid())
   choreId        String
   requestedById  String
   originalStatus ChoreStatus
   reason         String?
-  status         CancellationRequestStatus  @default(PENDING)
-  createdAt      DateTime                   @default(now())
+  status         CancellationRequestStatus @default(PENDING)
+  createdAt      DateTime                  @default(now())
   resolvedAt     DateTime?
 
-  chore          Chore  @relation(fields: [choreId], references: [id], onDelete: Cascade)
-  requestedBy    User   @relation(fields: [requestedById], references: [id], onDelete: Cascade)
+  chore       Chore @relation(fields: [choreId], references: [id], onDelete: Cascade)
+  requestedBy User  @relation(fields: [requestedById], references: [id], onDelete: Cascade)
 
   @@index([choreId])
   @@map("cancellation_requests")
 }
 
-// Payment model for internal payment tracking
+// NOTE: legacy payment model - not removed automatically
+// This is the old internal payment tracking model for fromUser/toUser transactions.
+// The new RazorpayPayment model below is the canonical model for Razorpay flows.
 model Payment {
-  id          String           @id @default(cuid())
-  choreId     String
-  fromUserId  String
-  toUserId    String
-  amount      Int              // rupees as integer for now
-  direction   PaymentDirection
-  method      PaymentMethod
-  notes       String?
-  createdAt   DateTime         @default(now())
+  id         String           @id @default(cuid())
+  choreId    String
+  fromUserId String
+  toUserId   String
+  amount     Int // rupees as integer for now
+  direction  PaymentDirection
+  method     PaymentMethod
+  notes      String?
+  createdAt  DateTime         @default(now())
 
-  chore   Chore @relation(fields: [choreId], references: [id], onDelete: Cascade)
-  fromUser User @relation("PaymentFrom", fields: [fromUserId], references: [id])
-  toUser   User @relation("PaymentTo", fields: [toUserId], references: [id])
+  chore         Chore          @relation(fields: [choreId], references: [id], onDelete: Cascade)
+  fromUser      User           @relation("PaymentFrom", fields: [fromUserId], references: [id])
+  toUser        User           @relation("PaymentTo", fields: [toUserId], references: [id])
   notifications Notification[]
 
   @@map("payments")
@@ -310,9 +329,9 @@ model UserNotificationPreference {
   email     Boolean  @default(true)
   sms       Boolean  @default(false)
   whatsapp  Boolean  @default(false)
-  preferred String?  // "email" | "sms" | "whatsapp" | "any"
-  muteFrom  Int?     // hour 0-23 (optional)
-  muteTo    Int?     // hour 0-23 (optional)
+  preferred String? // "email" | "sms" | "whatsapp" | "any"
+  muteFrom  Int? // hour 0-23 (optional)
+  muteTo    Int? // hour 0-23 (optional)
   updatedAt DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -321,15 +340,15 @@ model UserNotificationPreference {
 }
 
 model NotificationDelivery {
-  id               String    @id @default(cuid())
+  id               String   @id @default(cuid())
   notificationId   String?
   userId           String
-  provider         String    // "pabbly"
-  providerResponse String?   @db.Text
-  status           String    // "sent" | "failed" | "queued"
-  retryCount       Int       @default(0)
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
+  provider         String // "pabbly"
+  providerResponse String?  @db.Text
+  status           String // "sent" | "failed" | "queued"
+  retryCount       Int      @default(0)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -339,14 +358,14 @@ model NotificationDelivery {
 
 // Phone Verification model for SMS OTP
 model PhoneVerification {
-  id         String   @id @default(cuid())
-  phone      String   @unique
-  otpHash    String
-  expiresAt  DateTime
-  createdAt  DateTime @default(now())
-  verified   Boolean  @default(false)
-  attempts   Int      @default(0)
-  metadata   Json?    // optional: store provider response / txn ids
+  id        String   @id @default(cuid())
+  phone     String   @unique
+  otpHash   String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  verified  Boolean  @default(false)
+  attempts  Int      @default(0)
+  metadata  Json? // optional: store provider response / txn ids
 
   @@index([phone])
   @@map("phone_verifications")
@@ -354,14 +373,14 @@ model PhoneVerification {
 
 // Temporary signup storage for phone-verified signups
 model SignupTemp {
-  id          String   @id @default(cuid())
-  name        String
-  email       String   @unique
+  id           String    @id @default(cuid())
+  name         String
+  email        String    @unique
   passwordHash String
-  phone       String?
-  createdAt   DateTime @default(now())
-  expiresAt   DateTime?
-  metadata    Json?
+  phone        String?
+  createdAt    DateTime  @default(now())
+  expiresAt    DateTime?
+  metadata     Json?
 
   @@index([email])
   @@index([phone])
@@ -378,4 +397,87 @@ model PasswordResetToken {
   @@index([email])
   @@index([token])
   @@map("password_reset_tokens")
+}
+
+enum PaymentStatus {
+  PENDING // order created, not yet verified
+  SUCCESS // payment captured and signature verified
+  FAILED // payment failed or signature invalid
+  REFUNDED // (for future use) refunded / reversed
+}
+
+// Payment model for Razorpay payment tracking
+model RazorpayPayment {
+  id String @id @default(cuid())
+
+  // Foreign keys
+  userId  String
+  choreId String? // optional for now; will be linked to Chore later
+
+  // Money fields
+  amount   Int // amount in paise (e.g. 100 = ₹1)
+  currency String @default("INR")
+
+  // Razorpay identifiers
+  razorpayOrderId   String  @unique
+  razorpayPaymentId String? // set on success
+  razorpaySignature String? // set on success after verification
+
+  // Status
+  status PaymentStatus @default(PENDING)
+
+  // Split payment fields (for Razorpay Route)
+  platformFee  Int? // Platform fee in paise
+  workerPayout Int? // Worker payout amount in paise
+  transferId   String? // Razorpay transfer.id for releasing payout later
+
+  // Extra metadata for debugging / future analytics
+  notes Json? // copy of notes sent to Razorpay (e.g. choreId, user info)
+  meta  Json? // any extra gateway payload we want to store
+
+  // Audit fields
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  user  User   @relation("UserRazorpayPayments", fields: [userId], references: [id], onDelete: Cascade)
+  chore Chore? @relation("ChoreRazorpayPayments", fields: [choreId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([choreId])
+  @@index([status])
+  @@map("razorpay_payments")
+}
+
+/// NOTE: RazorpayPayment + PaymentStatus are now the canonical payment models for Razorpay flows.
+/// The legacy Payment model above (with fromUser/toUser) should be cleaned up once confirmed unused.
+
+enum DisputeStatus {
+  OPEN
+  IN_REVIEW
+  RESOLVED_REFUND_CLIENT
+  RESOLVED_PAY_WORKER
+  RESOLVED_MANUAL
+  CLOSED
+}
+
+// Dispute model for client-initiated disputes
+model Dispute {
+  id                     String        @id @default(cuid())
+  choreId                String
+  userId                 String
+  reason                 String
+  status                 DisputeStatus @default(OPEN)
+  resolution             String?
+  amountRefunded         Int? // paise
+  workerPayoutAdjustment Int? // paise
+  createdAt              DateTime      @default(now())
+  resolvedAt             DateTime?
+
+  chore Chore @relation(fields: [choreId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([choreId])
+  @@index([userId])
+  @@map("disputes")
 }

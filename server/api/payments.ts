@@ -80,7 +80,7 @@ export async function getPaymentSummaryForChore(choreId: string) {
     totalFromCustomer,
     totalToWorker,
     agreedPrice: chore?.agreedPrice ?? null,
-    paymentStatus: chore?.paymentStatus ?? ChorePaymentStatus.NONE,
+    paymentStatus: chore?.paymentStatus ?? ChorePaymentStatus.UNPAID,
   }
 }
 
@@ -90,19 +90,19 @@ export async function getPaymentSummaryForChore(choreId: string) {
 async function recomputeChorePaymentStatus(choreId: string) {
   const summary = await getPaymentSummaryForChore(choreId)
 
-  let newStatus: ChorePaymentStatus = ChorePaymentStatus.NONE
+  let newStatus: ChorePaymentStatus = ChorePaymentStatus.UNPAID
 
   if (!summary.agreedPrice || summary.agreedPrice <= 0) {
-    // No agreed price → keep NONE for now
-    newStatus = ChorePaymentStatus.NONE
+    // No agreed price → keep UNPAID
+    newStatus = ChorePaymentStatus.UNPAID
   } else {
     if (summary.totalFromCustomer <= 0) {
-      newStatus = ChorePaymentStatus.NONE
+      newStatus = ChorePaymentStatus.UNPAID
     } else if (summary.totalFromCustomer < summary.agreedPrice) {
-      newStatus = ChorePaymentStatus.CUSTOMER_PARTIAL
+      newStatus = ChorePaymentStatus.PENDING
     } else if (summary.totalFromCustomer >= summary.agreedPrice) {
-      // We mark CUSTOMER_PAID; later we can move to SETTLED when worker payout is done
-      newStatus = ChorePaymentStatus.CUSTOMER_PAID
+      // Customer fully paid → escrow is FUNDED
+      newStatus = ChorePaymentStatus.FUNDED
     }
   }
 
@@ -177,13 +177,13 @@ export async function getCustomerPaymentDashboard(
     .filter((p) => p.createdAt >= thirtyDaysAgo)
     .reduce((sum, p) => sum + p.amount, 0)
 
-  // Unsettled completed chores
+  // Unsettled completed chores (not yet funded or refunded)
   const unsettledCompletedChores = await prisma.chore.findMany({
     where: {
       createdById: customerId,
       status: ChoreStatus.COMPLETED,
       paymentStatus: {
-        not: ChorePaymentStatus.SETTLED,
+        in: [ChorePaymentStatus.UNPAID, ChorePaymentStatus.PENDING],
       },
     },
     select: {
@@ -309,13 +309,13 @@ export async function getWorkerPaymentDashboard(
     .filter((p) => p.createdAt >= thirtyDaysAgo)
     .reduce((sum, p) => sum + p.amount, 0)
 
-  // Unsettled completed chores
+  // Unsettled completed chores (not yet funded or refunded)
   const unsettledCompletedChores = await prisma.chore.findMany({
     where: {
       assignedWorkerId: workerId,
       status: ChoreStatus.COMPLETED,
       paymentStatus: {
-        not: ChorePaymentStatus.SETTLED,
+        in: [ChorePaymentStatus.UNPAID, ChorePaymentStatus.PENDING],
       },
     },
     select: {

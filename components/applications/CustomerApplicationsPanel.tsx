@@ -29,6 +29,7 @@ interface CustomerApplicationsPanelProps {
   applications: Application[]
   choreId: string
   choreStatus: string
+  assignedWorkerId?: string | null // Add this to check if chore is already assigned
   onAssign?: (applicationId: string) => Promise<void>
   onReject?: (applicationId: string) => Promise<void>
 }
@@ -108,6 +109,7 @@ function StarRating({ rating, count }: { rating: number; count: number }) {
 function ApplicationCard({
   application,
   choreStatus,
+  assignedWorkerId,
   onAssign,
   onReject,
   isAssigning,
@@ -115,13 +117,15 @@ function ApplicationCard({
 }: {
   application: Application
   choreStatus: string
+  assignedWorkerId?: string | null
   onAssign: () => void
   onReject: () => void
   isAssigning: boolean
   isRejecting: boolean
 }) {
   const status = statusConfig[application.status as keyof typeof statusConfig] || statusConfig.PENDING
-  const canTakeAction = application.status === 'PENDING' && choreStatus === 'PUBLISHED'
+  // Simplified: can assign if application is pending and chore is not yet assigned
+  const canAssign = application.status === 'PENDING' && !assignedWorkerId
   const isAccepted = application.status === 'ACCEPTED'
 
   return (
@@ -199,8 +203,8 @@ function ApplicationCard({
           Applied {formatDate(application.createdAt)}
         </span>
 
-        {/* Action buttons */}
-        {canTakeAction && (
+        {/* Action buttons - show when application is pending and chore is not assigned */}
+        {canAssign && (
           <div className="flex items-center gap-2">
             <Button
               variant="ghost"
@@ -231,14 +235,14 @@ function ApplicationCard({
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                   </svg>
-                  Accepting...
+                  Assigning...
                 </>
               ) : (
                 <>
                   <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
                   </svg>
-                  Accept
+                  Assign Worker
                 </>
               )}
             </Button>
@@ -271,6 +275,7 @@ export default function CustomerApplicationsPanel({
   applications,
   choreId,
   choreStatus,
+  assignedWorkerId,
 }: CustomerApplicationsPanelProps) {
   const router = useRouter()
   const toast = useToast()
@@ -290,7 +295,7 @@ export default function CustomerApplicationsPanel({
   const acceptedApp = localApplications.find((a) => a.status === 'ACCEPTED')
 
   const handleAssign = async (applicationId: string) => {
-    if (!confirm('Are you sure you want to accept this worker? Other pending applications will be automatically declined.')) {
+    if (!confirm('Are you sure you want to assign this worker? Other pending applications will be automatically declined.')) {
       return
     }
 
@@ -299,8 +304,22 @@ export default function CustomerApplicationsPanel({
     setSuccess('')
 
     try {
-      const response = await fetch(`/api/applications/${applicationId}/assign`, {
+      // Find the application to get the workerId
+      const application = localApplications.find((app) => app.id === applicationId)
+      if (!application) {
+        setError('Application not found')
+        return
+      }
+
+      // Use the new assign-worker route
+      const response = await fetch(`/api/chores/${choreId}/assign-worker`, {
         method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          workerId: application.workerId,
+        }),
       })
 
       const data = await response.json()
@@ -310,8 +329,8 @@ export default function CustomerApplicationsPanel({
           toast.error('Too many requests', 'Please try again later.')
           setError('You are making too many requests. Please try again later.')
         } else {
-          toast.error('Failed to accept', data.error || 'Could not accept the application.')
-          setError(data.error || 'Failed to accept application')
+          toast.error('Failed to assign', data.error || 'Could not assign the worker.')
+          setError(data.error || 'Failed to assign worker')
         }
         return
       }
@@ -324,8 +343,8 @@ export default function CustomerApplicationsPanel({
         })) as Application[]
       )
       
-      toast.success('Worker assigned! 🎉', 'They have been notified and other applicants have been declined.')
-      setSuccess('Worker accepted! They have been notified.')
+      toast.success('Worker assigned! 🎉', 'Please fund the escrow to allow them to start the job.')
+      setSuccess('Worker assigned! Please fund the escrow to proceed.')
       router.refresh()
     } catch (err) {
       toast.error('Something went wrong', 'Please try again.')
@@ -428,6 +447,7 @@ export default function CustomerApplicationsPanel({
               key={app.id}
               application={app}
               choreStatus={choreStatus}
+              assignedWorkerId={assignedWorkerId}
               onAssign={() => handleAssign(app.id)}
               onReject={() => handleReject(app.id)}
               isAssigning={assigningId === app.id}
