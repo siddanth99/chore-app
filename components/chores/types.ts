@@ -12,6 +12,7 @@ export type Chore = {
   currency?: string;
   type: 'online' | 'offline';
   status: 'published' | 'in_progress' | 'completed';
+  paymentStatus?: 'UNPAID' | 'PENDING' | 'FUNDED' | 'REFUNDED';
   location?: string;
   imageUrl?: string | null;
   createdAt: string;

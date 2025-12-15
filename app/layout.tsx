@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono, Inter } from "next/font/google";
+import Script from "next/script";
 import { Providers } from "@/components/providers";
 import Header from "@/components/landing/Header";
 import "leaflet/dist/leaflet.css";
@@ -68,6 +69,10 @@ export default function RootLayout({
       <body
         className={`${inter.variable} ${geistSans.variable} ${geistMono.variable} antialiased`}
       >
+        <Script
+          src="https://checkout.razorpay.com/v1/checkout.js"
+          strategy="lazyOnload"
+        />
         <Providers>
           <Header />
           <main className="min-h-screen">

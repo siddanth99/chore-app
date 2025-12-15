@@ -283,9 +283,9 @@ export default function DashboardClient({ user, role, data }: DashboardClientPro
                             </Link>
                             <Badge
                               variant={
-                                chore.paymentStatus === 'NONE'
-                                  ? 'statusDraft'
-                                  : chore.paymentStatus === 'CUSTOMER_PARTIAL'
+                                chore.paymentStatus === 'UNPAID'
+                                ? 'statusDraft'
+                                : chore.paymentStatus === 'PENDING'
                                   ? 'statusInProgress'
                                   : 'statusPublished'
                               }
@@ -598,9 +598,9 @@ export default function DashboardClient({ user, role, data }: DashboardClientPro
                           </Link>
                           <Badge
                             variant={
-                              chore.paymentStatus === 'NONE'
+                              chore.paymentStatus === 'UNPAID'
                                 ? 'statusDraft'
-                                : chore.paymentStatus === 'CUSTOMER_PARTIAL'
+                                : chore.paymentStatus === 'PENDING'
                                 ? 'statusInProgress'
                                 : 'statusPublished'
                             }
