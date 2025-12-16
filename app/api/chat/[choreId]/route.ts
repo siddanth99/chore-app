@@ -43,7 +43,7 @@ export async function POST(
     const { choreId } = await context.params
     const body = await request.json()
 
-    const content = body.content
+    const content = body.content || body.text // Support both 'content' and 'text' for flexibility
     if (!content || !content.trim()) {
       return NextResponse.json(
         { error: 'Message content is required' },

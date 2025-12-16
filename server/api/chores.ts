@@ -161,6 +161,13 @@ export async function getChoreById(id: string) {
           },
         },
       },
+      // TODO: Re-enable workerPayouts include when Razorpay payouts integration is complete.
+      // workerPayouts: {
+      //   orderBy: {
+      //     createdAt: 'desc',
+      //   },
+      //   take: 1, // Get latest payout
+      // },
     },
   })
 }

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/server/auth/role'
 import { prisma } from '@/server/db/client'
 import { ChoreStatus } from '@prisma/client'
+import { createWorkerPayout } from '@/server/api/payouts'
 
 /**
  * POST /api/chores/[choreId]/complete
@@ -70,6 +71,7 @@ export async function POST(
             id: true,
             name: true,
             email: true,
+            upiId: true,
           },
         },
         createdBy: {
@@ -80,6 +82,17 @@ export async function POST(
         },
       },
     })
+
+    // If payment is FUNDED, trigger payout creation in background
+    // Note: We don't await this to avoid blocking the response
+    // The payout will be created asynchronously
+    if (updatedChore.paymentStatus === 'FUNDED' && updatedChore.assignedWorker?.upiId) {
+      // Trigger payout creation asynchronously (don't block response)
+      createWorkerPayout(choreId).catch((error) => {
+        console.error('Error creating payout after completion:', error)
+        // Payout can be retried manually if this fails
+      })
+    }
 
     return NextResponse.json({ chore: updatedChore }, { status: 200 })
   } catch (error) {

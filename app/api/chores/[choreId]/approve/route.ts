@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/server/auth/role'
 import { prisma } from '@/server/db/client'
 import { ChoreStatus } from '@prisma/client'
-import { isRouteMockEnabled, isRouteLiveEnabled } from '@/lib/paymentsConfig'
+import { createWorkerPayout } from '@/server/api/payouts'
 
 const KEY_ID = process.env.RAZORPAY_KEY_ID
 const KEY_SECRET = process.env.RAZORPAY_KEY_SECRET
@@ -94,66 +94,14 @@ export async function POST(
       },
     })
 
-    // Release payout if transfer exists
-    if (payment?.transferId) {
-      // MOCK MODE: Pretend payout release succeeded
-      if (isRouteMockEnabled()) {
-        // Update payment meta to record mock release
-        await prisma.razorpayPayment.update({
-          where: { id: payment.id },
-          data: {
-            meta: {
-              ...((payment.meta as Record<string, any>) || {}),
-              mockRelease: true,
-              mockReleaseAt: new Date().toISOString(),
-              releasedBy: user.id,
-            },
-          },
-        })
-
-        console.log('Payout released (mock mode):', payment.transferId)
-      }
-      // LIVE MODE: Call real Razorpay transfer release API
-      else if (isRouteLiveEnabled() && KEY_ID && KEY_SECRET) {
-        try {
-          // Use direct HTTP call to Razorpay API for transfer release
-          const auth = Buffer.from(`${KEY_ID}:${KEY_SECRET}`).toString('base64')
-
-          const releaseRes = await fetch(`https://api.razorpay.com/v1/transfers/${payment.transferId}/release`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Basic ${auth}`,
-            },
-          })
-
-          if (releaseRes.ok) {
-            // Update payment meta to record release
-            await prisma.razorpayPayment.update({
-              where: { id: payment.id },
-              data: {
-                meta: {
-                  ...((payment.meta as Record<string, any>) || {}),
-                  releaseAt: new Date().toISOString(),
-                  releasedBy: user.id,
-                },
-              },
-            })
-
-            console.log('Payout released successfully:', payment.transferId)
-          } else {
-            const errorText = await releaseRes.text()
-            console.error('Failed to release payout:', errorText)
-            // Don't fail the approval if release fails - can be retried later
-          }
-        } catch (error: any) {
-          console.error('Error releasing payout:', error)
-          // Log error but don't fail the approval
-          // The payout can be released manually later if needed
-        }
-      }
-    } else if (payment && !payment.transferId) {
-      console.warn('Payment record exists but no transferId found:', payment.id)
+    // If chore is FUNDED, ensure payout is created
+    // Note: We don't await this to avoid blocking the response
+    if (chore.paymentStatus === 'FUNDED' && chore.assignedWorkerId) {
+      // Trigger payout creation asynchronously (don't block response)
+      createWorkerPayout(choreId).catch((error) => {
+        console.error('Error creating payout after approval:', error)
+        // Payout can be retried manually if this fails
+      })
     }
 
     // Update chore: change status to CLOSED
@@ -183,7 +131,6 @@ export async function POST(
     return NextResponse.json(
       {
         ok: true,
-        mode: isRouteMockEnabled() ? 'mock' : 'live',
         chore: updatedChore,
       },
       { status: 200 }

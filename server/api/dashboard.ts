@@ -46,12 +46,12 @@ export async function getWorkerDashboardData(workerId: string): Promise<WorkerDa
     allCompletedChores,
     cancelledChores,
   ] = await Promise.all([
-    // Assigned chores (including cancellation requested that were originally ASSIGNED)
+    // Assigned chores (ASSIGNED, FUNDED, or cancellation requested that were originally ASSIGNED)
     prisma.chore.findMany({
       where: {
         assignedWorkerId: workerId,
         status: {
-          in: [ChoreStatus.ASSIGNED, 'CANCELLATION_REQUESTED' as ChoreStatus],
+          in: [ChoreStatus.ASSIGNED, ChoreStatus.FUNDED, 'CANCELLATION_REQUESTED' as ChoreStatus],
         },
       },
       include: {
@@ -141,6 +141,13 @@ export async function getWorkerDashboardData(workerId: string): Promise<WorkerDa
             bidAmount: true,
           },
         },
+        // TODO: Re-enable workerPayouts include when Razorpay payouts integration is complete.
+        // workerPayouts: {
+        //   orderBy: {
+        //     createdAt: 'desc',
+        //   },
+        //   take: 1, // Get latest payout
+        // },
       },
       orderBy: {
         updatedAt: 'desc',
@@ -333,12 +340,12 @@ export async function getCustomerDashboardData(
           createdAt: 'desc',
         },
       }),
-      // Active chores (ASSIGNED, IN_PROGRESS, or CANCELLATION_REQUESTED)
+      // Active chores (ASSIGNED, FUNDED, IN_PROGRESS, or CANCELLATION_REQUESTED)
       prisma.chore.findMany({
         where: {
           createdById: customerId,
           status: {
-            in: [ChoreStatus.ASSIGNED, ChoreStatus.IN_PROGRESS, 'CANCELLATION_REQUESTED' as ChoreStatus],
+            in: [ChoreStatus.ASSIGNED, ChoreStatus.FUNDED, ChoreStatus.IN_PROGRESS, 'CANCELLATION_REQUESTED' as ChoreStatus],
           },
         },
         include: {

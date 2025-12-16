@@ -3,6 +3,7 @@ import { getChoreById } from '@/server/api/chores'
 import { getCurrentUser } from '@/server/auth/role'
 import { listApplicationsForChore } from '@/server/api/applications'
 import { getAverageRating } from '@/server/api/ratings'
+import { prisma } from '@/server/db/client'
 import ChoreDetailClient from './chore-detail-client'
 
 export default async function ChoreDetailPage(props: {
@@ -73,12 +74,28 @@ export default async function ChoreDetailPage(props: {
       ? (chore as any).cancellationRequests[0]
       : null
 
+  // If user is not the owner, fetch their application for this chore (if they've applied)
+  let userApplication = null
+  if (user && chore.createdById !== user.id) {
+    try {
+      userApplication = await prisma.application.findFirst({
+        where: {
+          choreId: chore.id,
+          workerId: user.id,
+        },
+      })
+    } catch (error) {
+      console.error('Error loading user application:', error)
+    }
+  }
+
   // If chore exists, show the real client page
   return (
     <ChoreDetailClient
       chore={chore}
       currentUser={user}
       initialApplications={applications}
+      userApplication={userApplication}
       assignedWorkerRating={assignedWorkerRating}
       latestCancellationRequest={latestCancellationRequest}
     />

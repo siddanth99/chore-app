@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/server/auth/role'
 import { prisma } from '@/server/db/client'
-import { isRouteMockEnabled, isRouteLiveEnabled } from '@/lib/paymentsConfig'
 
 const KEY_ID = process.env.RAZORPAY_KEY_ID
 const KEY_SECRET = process.env.RAZORPAY_KEY_SECRET
@@ -82,44 +81,7 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // MOCK MODE: Generate fake account ID and skip Razorpay calls
-    if (isRouteMockEnabled()) {
-      const fakeAccountId = `acc_mock_${fullUser.id}`
-
-      // Update user in database with fake account ID
-      const updatedUser = await prisma.user.update({
-        where: { id: fullUser.id },
-        data: {
-          razorpayAccountId: fakeAccountId,
-          upiId: upiId.trim(),
-          payoutOnboardingAt: new Date(),
-        },
-        select: {
-          upiId: true,
-        },
-      })
-
-      return NextResponse.json(
-        {
-          success: true,
-          ok: true,
-          mode: 'mock',
-          accountId: fakeAccountId,
-          razorpayAccountId: fakeAccountId,
-          upiId: updatedUser.upiId,
-          message: 'Payout onboarding completed successfully (mock mode)',
-        },
-        { status: 200 }
-      )
-    }
-
-    // LIVE MODE: Real Razorpay Route API calls
-    if (!isRouteLiveEnabled()) {
-      return NextResponse.json(
-        { error: 'RAZORPAY_ROUTE_MODE must be set to "mock" or "live"' },
-        { status: 500 }
-      )
-    }
+    // Real Razorpay Route API calls for worker onboarding
 
     if (!KEY_ID || !KEY_SECRET) {
       console.error('Missing Razorpay credentials')

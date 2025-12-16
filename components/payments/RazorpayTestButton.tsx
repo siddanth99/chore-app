@@ -41,7 +41,7 @@ export function RazorpayTestButton() {
 
       if (!orderResponse.ok) {
         const errorText = await orderResponse.text();
-        console.error("Failed to create order (RazorpayTestButton v2):", {
+        console.error("Failed to create order:", {
           status: orderResponse.status,
           statusText: orderResponse.statusText,
           response: errorText,
@@ -66,7 +66,7 @@ export function RazorpayTestButton() {
         currency, // "INR"
         order_id: orderId,
         name: "ChoreBid",
-        description: "Test Payment",
+        description: "Payment",
         prefill: {
           name: "Test User",
           email: "test@example.com",
@@ -105,7 +105,7 @@ export function RazorpayTestButton() {
             const verifyData = await verifyResponse.json();
 
             if (verifyData.success) {
-              setMessage("✅ Test payment success & verified!");
+              setMessage("✅ Payment success & verified!");
             } else {
               setMessage(`❌ Payment verification failed: ${verifyData.error || "Unknown error"}`);
             }
@@ -167,7 +167,7 @@ export function RazorpayTestButton() {
             Processing...
           </>
         ) : (
-          "Test Razorpay Payment (₹1)"
+          "Make Payment (₹1)"
         )}
       </Button>
       {message && (

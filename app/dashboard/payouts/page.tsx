@@ -85,7 +85,6 @@ export default async function WorkerPayoutsPage() {
     totalEarnings,
     monthEarnings,
     upiId: fullUser.upiId || 'Not set',
-    isMockMode: fullUser.razorpayAccountId?.startsWith('acc_mock_') || false,
   }
 
   return (

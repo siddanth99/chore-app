@@ -282,14 +282,6 @@ export default function DashboardClientV2({ user, role, data }: DashboardClientV
               </div>
             )}
 
-            {/* Mock Mode Indicator (only if onboarded) */}
-            {user.razorpayAccountId && user.razorpayAccountId.startsWith('acc_mock_') && (
-              <div className="mb-6 p-3 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
-                <p className="text-sm text-blue-800 dark:text-blue-200">
-                  ⚠️ Test mode: Payouts are simulated. No real money is moved.
-                </p>
-              </div>
-            )}
 
             {/* Stats Grid - Maps workerData.stats → StatCard components */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

@@ -88,18 +88,30 @@ export async function POST(req: NextRequest) {
       });
 
       // Update chore payment status and status to FUNDED if choreId exists
+      // Make this idempotent - if already FUNDED, just return success
       if (existing.choreId) {
-        await prisma.chore.update({
+        const chore = await prisma.chore.findUnique({
           where: { id: existing.choreId },
-          data: {
-            paymentStatus: "FUNDED",
-            status: "FUNDED", // Escrow funded - ready for worker to start
-          },
+          select: { paymentStatus: true, status: true },
         });
+
+        // Only update if not already FUNDED (idempotency)
+        if (chore && chore.paymentStatus !== "FUNDED") {
+          await prisma.chore.update({
+            where: { id: existing.choreId },
+            data: {
+              paymentStatus: "FUNDED",
+              status: "FUNDED", // Escrow funded - ready for worker to start
+            },
+          });
+        }
       }
     }
 
-    return NextResponse.json({ success: true }, { status: 200 });
+    return NextResponse.json({ 
+      success: true,
+      message: "Payment verified and chore funded",
+    }, { status: 200 });
   } catch (error) {
     console.error("Error in /api/payments/verify:", error);
     return NextResponse.json(

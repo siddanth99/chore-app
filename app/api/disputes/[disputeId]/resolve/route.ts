@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/server/auth/role'
 import { prisma } from '@/server/db/client'
 import { DisputeStatus, ChoreStatus, ChorePaymentStatus } from '@prisma/client'
-import { isRouteMockEnabled, isRouteLiveEnabled } from '@/lib/paymentsConfig'
 
 const KEY_ID = process.env.RAZORPAY_KEY_ID
 const KEY_SECRET = process.env.RAZORPAY_KEY_SECRET
@@ -116,128 +115,97 @@ export async function POST(
       choreStatusUpdate = ChoreStatus.CANCELED
       chorePaymentStatusUpdate = ChorePaymentStatus.REFUNDED
 
-      // Process refund (mock or live)
-      if (payment) {
-        if (isRouteMockEnabled()) {
-          // Mock mode: Just update meta
-          await prisma.razorpayPayment.update({
-            where: { id: payment.id },
-            data: {
-              status: 'REFUNDED',
-              meta: {
-                ...((payment.meta as Record<string, any>) || {}),
-                mockRefundAt: new Date().toISOString(),
-                refundReason: 'Dispute resolution',
-                refundAmount: amountRefunded ?? payment.amount,
+      // Process refund
+      if (payment && KEY_ID && KEY_SECRET && payment.razorpayPaymentId) {
+        // Call Razorpay Refund API
+        try {
+          const auth = Buffer.from(`${KEY_ID}:${KEY_SECRET}`).toString('base64')
+          const refundAmount = amountRefunded ?? payment.amount
+
+          const refundRes = await fetch(
+            `https://api.razorpay.com/v1/payments/${payment.razorpayPaymentId}/refund`,
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Basic ${auth}`,
               },
-            },
-          })
-        } else if (isRouteLiveEnabled() && KEY_ID && KEY_SECRET && payment.razorpayPaymentId) {
-          // Live mode: Call Razorpay Refund API
-          try {
-            const auth = Buffer.from(`${KEY_ID}:${KEY_SECRET}`).toString('base64')
-            const refundAmount = amountRefunded ?? payment.amount
-
-            const refundRes = await fetch(
-              `https://api.razorpay.com/v1/payments/${payment.razorpayPaymentId}/refund`,
-              {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  Authorization: `Basic ${auth}`,
+              body: JSON.stringify({
+                amount: refundAmount,
+                notes: {
+                  reason: 'Dispute resolution',
+                  disputeId: dispute.id,
                 },
-                body: JSON.stringify({
-                  amount: refundAmount,
-                  notes: {
-                    reason: 'Dispute resolution',
-                    disputeId: dispute.id,
-                  },
-                }),
-              }
-            )
-
-            if (refundRes.ok) {
-              const refundData = await refundRes.json()
-              await prisma.razorpayPayment.update({
-                where: { id: payment.id },
-                data: {
-                  status: 'REFUNDED',
-                  meta: {
-                    ...((payment.meta as Record<string, any>) || {}),
-                    refundId: refundData.id,
-                    refundAt: new Date().toISOString(),
-                    refundAmount: refundData.amount,
-                    refundReason: 'Dispute resolution',
-                  },
-                },
-              })
-            } else {
-              const errorText = await refundRes.text()
-              console.error('Razorpay refund failed:', errorText)
-              // Continue with dispute resolution even if refund API fails
-              // Admin can manually process refund
+              }),
             }
-          } catch (error: any) {
-            console.error('Error processing Razorpay refund:', error)
-            // Continue with dispute resolution
+          )
+
+          if (refundRes.ok) {
+            const refundData = await refundRes.json()
+            await prisma.razorpayPayment.update({
+              where: { id: payment.id },
+              data: {
+                status: 'REFUNDED',
+                meta: {
+                  ...((payment.meta as Record<string, any>) || {}),
+                  refundId: refundData.id,
+                  refundAt: new Date().toISOString(),
+                  refundAmount: refundData.amount,
+                  refundReason: 'Dispute resolution',
+                },
+              },
+            })
+          } else {
+            const errorText = await refundRes.text()
+            console.error('Razorpay refund failed:', errorText)
+            // Continue with dispute resolution even if refund API fails
+            // Admin can manually process refund
           }
+        } catch (error: any) {
+          console.error('Error processing Razorpay refund:', error)
+          // Continue with dispute resolution
         }
       }
     }
     // Handle pay worker action
-    else if (action === 'PAY_WORKER') {
+    if (action === 'PAY_WORKER') {
       newDisputeStatus = DisputeStatus.RESOLVED_PAY_WORKER
       choreStatusUpdate = ChoreStatus.CLOSED
 
       // Release payout if transfer exists
-      if (payment?.transferId) {
-        if (isRouteMockEnabled()) {
-          // Mock mode: Just update meta
-          await prisma.razorpayPayment.update({
-            where: { id: payment.id },
-            data: {
-              meta: {
-                ...((payment.meta as Record<string, any>) || {}),
-                mockReleaseAt: new Date().toISOString(),
-                releasedBy: user.id,
-                disputeResolution: true,
+      if (payment?.transferId && KEY_ID && KEY_SECRET) {
+        // Release transfer
+        try {
+          const auth = Buffer.from(`${KEY_ID}:${KEY_SECRET}`).toString('base64')
+          const releaseRes = await fetch(
+            `https://api.razorpay.com/v1/transfers/${payment.transferId}/release`,
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Basic ${auth}`,
               },
-            },
-          })
-        } else if (isRouteLiveEnabled() && KEY_ID && KEY_SECRET) {
-          // Live mode: Release transfer
-          try {
-            const auth = Buffer.from(`${KEY_ID}:${KEY_SECRET}`).toString('base64')
-            const releaseRes = await fetch(
-              `https://api.razorpay.com/v1/transfers/${payment.transferId}/release`,
-              {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  Authorization: `Basic ${auth}`,
-                },
-              }
-            )
-
-            if (releaseRes.ok) {
-              await prisma.razorpayPayment.update({
-                where: { id: payment.id },
-                data: {
-                  meta: {
-                    ...((payment.meta as Record<string, any>) || {}),
-                    releaseAt: new Date().toISOString(),
-                    releasedBy: user.id,
-                    disputeResolution: true,
-                  },
-                },
-              })
-            } else {
-              const errorText = await releaseRes.text()
-              console.error('Failed to release payout:', errorText)
             }
-          } catch (error: any) {
-            console.error('Error releasing payout:', error)
+          )
+
+          if (releaseRes.ok) {
+            await prisma.razorpayPayment.update({
+              where: { id: payment.id },
+              data: {
+                meta: {
+                  ...((payment.meta as Record<string, any>) || {}),
+                  releaseAt: new Date().toISOString(),
+                  releasedBy: user.id,
+                  disputeResolution: true,
+                },
+              },
+            })
+          } else {
+            const errorText = await releaseRes.text()
+            console.error('Failed to release payout:', errorText)
           }
+        } catch (error: any) {
+          console.error('Error releasing payout:', error)
         }
       }
 
@@ -251,7 +219,7 @@ export async function POST(
       })
     }
     // Handle manual action
-    else {
+    if (action === 'MANUAL') {
       newDisputeStatus = DisputeStatus.RESOLVED_MANUAL
       // Don't update chore status for manual resolution
     }

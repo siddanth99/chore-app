@@ -26,6 +26,7 @@ model User {
   razorpayAccountId  String? // Razorpay Route sub-account ID (acc_xxxxx)
   upiId              String? // UPI ID for payouts
   payoutOnboardingAt DateTime? // When worker completed payout onboarding
+  payoutsEnabled     Boolean   @default(false) // Worker toggle for enabling/disabling payouts
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 
@@ -41,6 +42,7 @@ model User {
   paymentsFrom           Payment[]                   @relation("PaymentFrom")
   paymentsTo             Payment[]                   @relation("PaymentTo")
   razorpayPayments       RazorpayPayment[]           @relation("UserRazorpayPayments")
+  workerPayouts          WorkerPayout[]              @relation("UserWorkerPayouts")
   notifications          Notification[]
   notificationPreference UserNotificationPreference?
   notificationDeliveries NotificationDelivery[]
@@ -95,6 +97,7 @@ model Chore {
   razorpayPayments     RazorpayPayment[]     @relation("ChoreRazorpayPayments")
   notifications        Notification[]
   disputes             Dispute[]
+  workerPayouts        WorkerPayout[]
 
   @@map("chores")
 }
@@ -247,6 +250,12 @@ enum ChorePaymentStatus {
   PENDING
   FUNDED
   REFUNDED
+}
+
+enum PayoutStatus {
+  PENDING
+  SUCCESS
+  FAILED
 }
 
 model CancellationRequest {
@@ -480,4 +489,24 @@ model Dispute {
   @@index([choreId])
   @@index([userId])
   @@map("disputes")
+}
+
+model WorkerPayout {
+  id               String       @id @default(cuid())
+  choreId          String
+  workerId         String
+  amount           Int // paise
+  status           PayoutStatus @default(PENDING)
+  razorpayPayoutId String? // payout id returned by Razorpay
+  errorMessage     String? // Razorpay error if failed
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  chore  Chore @relation(fields: [choreId], references: [id], onDelete: Cascade)
+  worker User  @relation("UserWorkerPayouts", fields: [workerId], references: [id], onDelete: Cascade)
+
+  @@index([choreId])
+  @@index([workerId])
+  @@index([status])
+  @@map("worker_payouts")
 }

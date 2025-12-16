@@ -18,7 +18,6 @@ type Summary = {
   totalEarnings: number
   monthEarnings: number
   upiId: string
-  isMockMode: boolean
 }
 
 type Props = {
@@ -170,14 +169,6 @@ export default function WorkerPayoutTable({ payments, summary }: Props) {
             </div>
           </div>
 
-          {/* Mock Mode Indicator */}
-          {summary.isMockMode && (
-            <div className="mt-4 p-3 rounded-lg bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800">
-              <p className="text-sm text-yellow-800 dark:text-yellow-200">
-                ⚠️ <strong>Test Mode</strong> — Payouts are simulated. No real money is transferred.
-              </p>
-            </div>
-          )}
         </div>
       </Card>
 
@@ -276,7 +267,7 @@ export default function WorkerPayoutTable({ payments, summary }: Props) {
               <tbody className="bg-white dark:bg-slate-900 divide-y divide-gray-200 dark:divide-slate-700">
                 {filteredPayments.map((payment) => {
                   const meta = (payment.meta as Record<string, any>) || {}
-                  const releaseDate = meta.releaseAt || meta.mockReleaseAt
+                  const releaseDate = meta.releaseAt
 
                   return (
                     <tr key={payment.id}>
