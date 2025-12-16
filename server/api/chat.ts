@@ -5,7 +5,7 @@ import { NotificationType } from '@prisma/client'
 
 /**
  * List messages for a specific chore
- * Only accessible by the customer who created the chore or the assigned worker
+ * Supports both pre-assignment (applicants can chat) and post-assignment (only assigned worker) modes
  */
 export async function listMessages(choreId: string, userId: string) {
   // Verify user has access to this chore
@@ -14,6 +14,11 @@ export async function listMessages(choreId: string, userId: string) {
     select: {
       createdById: true,
       assignedWorkerId: true,
+      status: true,
+      applications: {
+        where: { workerId: userId },
+        select: { id: true, status: true },
+      },
     },
   })
 
@@ -23,26 +28,88 @@ export async function listMessages(choreId: string, userId: string) {
 
   const isOwner = chore.createdById === userId
   const isAssignedWorker = chore.assignedWorkerId === userId
+  const hasApplication = chore.applications.length > 0
 
-  if (!isOwner && !isAssignedWorker) {
-    throw new Error('You do not have access to this conversation')
+  // POST-ASSIGNMENT: Only owner and assigned worker can access
+  if (chore.assignedWorkerId) {
+    if (!isOwner && !isAssignedWorker) {
+      throw new Error('You do not have access to this conversation')
+    }
+    
+    // Determine the other party's ID
+    const otherUserId = isOwner ? chore.assignedWorkerId : chore.createdById
+    
+    // Query messages between the two parties for this chore
+    const messages = await prisma.chatMessage.findMany({
+      where: {
+        choreId,
+        OR: [
+          { fromUserId: userId, toUserId: otherUserId },
+          { fromUserId: otherUserId, toUserId: userId },
+        ],
+      },
+      include: {
+        fromUser: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+      },
+      orderBy: {
+        createdAt: 'asc',
+      },
+    })
+    
+    return messages
   }
 
-  // Determine the other party's ID
-  const otherUserId = isOwner ? chore.assignedWorkerId : chore.createdById
-
-  if (!otherUserId) {
-    // No assigned worker yet, return empty messages
-    return []
+  // PRE-ASSIGNMENT: Owner can chat with any applicant, applicants can chat with owner
+  if (isOwner) {
+    // Owner can see all messages to/from any applicant
+    const messages = await prisma.chatMessage.findMany({
+      where: {
+        choreId,
+        OR: [
+          { fromUserId: userId }, // Messages sent by owner
+          { toUserId: userId },   // Messages received by owner
+        ],
+      },
+      include: {
+        fromUser: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+      },
+      orderBy: {
+        createdAt: 'asc',
+      },
+    })
+    
+    return messages
   }
 
-  // Query messages between the two parties for this chore
+  // Worker must have applied (and not be rejected) to chat in pre-assignment mode
+  if (!hasApplication) {
+    throw new Error('You must apply to this chore before you can send messages')
+  }
+
+  const application = chore.applications[0]
+  if (application.status === 'REJECTED') {
+    throw new Error('Your application was rejected. You cannot send messages.')
+  }
+
+  // Worker can chat with owner in pre-assignment mode
   const messages = await prisma.chatMessage.findMany({
     where: {
       choreId,
       OR: [
-        { fromUserId: userId, toUserId: otherUserId },
-        { fromUserId: otherUserId, toUserId: userId },
+        { fromUserId: userId, toUserId: chore.createdById },
+        { fromUserId: chore.createdById, toUserId: userId },
       ],
     },
     include: {
@@ -64,7 +131,7 @@ export async function listMessages(choreId: string, userId: string) {
 
 /**
  * Send a message in a chore conversation
- * Only accessible by the customer who created the chore or the assigned worker
+ * Supports both pre-assignment (applicants can chat) and post-assignment (only assigned worker) modes
  */
 export async function sendMessage(choreId: string, userId: string, content: string) {
   // Validate content
@@ -78,6 +145,11 @@ export async function sendMessage(choreId: string, userId: string, content: stri
     select: {
       createdById: true,
       assignedWorkerId: true,
+      status: true,
+      applications: {
+        where: { workerId: userId },
+        select: { id: true, status: true },
+      },
     },
   })
 
@@ -87,16 +159,72 @@ export async function sendMessage(choreId: string, userId: string, content: stri
 
   const isOwner = chore.createdById === userId
   const isAssignedWorker = chore.assignedWorkerId === userId
+  const hasApplication = chore.applications.length > 0
 
-  if (!isOwner && !isAssignedWorker) {
-    throw new Error('You do not have access to this conversation')
+  let toUserId: string | null = null
+
+  // POST-ASSIGNMENT: Only owner and assigned worker can send messages
+  if (chore.assignedWorkerId) {
+    if (!isOwner && !isAssignedWorker) {
+      throw new Error('You do not have access to this conversation')
+    }
+    
+    // Determine the recipient's ID
+    toUserId = isOwner ? chore.assignedWorkerId : chore.createdById
+  } 
+  // PRE-ASSIGNMENT: Owner can chat with applicants, applicants can chat with owner
+  else {
+    if (isOwner) {
+      // In pre-assignment mode, owner can message any applicant
+      // For simplicity, if owner has sent messages before, use the most recent recipient
+      // Otherwise, use the first pending applicant
+      const recentMessage = await prisma.chatMessage.findFirst({
+        where: {
+          choreId,
+          fromUserId: userId,
+        },
+        orderBy: { createdAt: 'desc' },
+        select: { toUserId: true },
+      })
+      
+      if (recentMessage?.toUserId) {
+        // Owner has messaged someone before, continue that conversation
+        toUserId = recentMessage.toUserId
+      } else {
+        // First time messaging, use the first pending applicant
+        const firstApplicant = await prisma.application.findFirst({
+          where: {
+            choreId,
+            status: 'PENDING',
+          },
+          select: { workerId: true },
+          orderBy: { createdAt: 'asc' },
+        })
+        
+        if (!firstApplicant) {
+          throw new Error('Cannot send message: no pending applicants to message')
+        }
+        
+        toUserId = firstApplicant.workerId
+      }
+    } else {
+      // Worker must have applied (and not be rejected) to send messages in pre-assignment mode
+      if (!hasApplication) {
+        throw new Error('You must apply to this chore before you can send messages')
+      }
+
+      const application = chore.applications[0]
+      if (application.status === 'REJECTED') {
+        throw new Error('Your application was rejected. You cannot send messages.')
+      }
+
+      // Worker sends to owner in pre-assignment mode
+      toUserId = chore.createdById
+    }
   }
 
-  // Determine the recipient's ID
-  const toUserId = isOwner ? chore.assignedWorkerId : chore.createdById
-
   if (!toUserId) {
-    throw new Error('Cannot send message: no assigned worker yet')
+    throw new Error('Cannot send message: invalid recipient')
   }
 
   // Get recipient info for external notification

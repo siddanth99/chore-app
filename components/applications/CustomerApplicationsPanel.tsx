@@ -30,6 +30,8 @@ interface CustomerApplicationsPanelProps {
   choreId: string
   choreStatus: string
   assignedWorkerId?: string | null // Add this to check if chore is already assigned
+  selectedApplicationId?: string | null
+  onSelectApplication?: (applicationId: string | null) => void
   onAssign?: (applicationId: string) => Promise<void>
   onReject?: (applicationId: string) => Promise<void>
 }
@@ -110,6 +112,8 @@ function ApplicationCard({
   application,
   choreStatus,
   assignedWorkerId,
+  isSelected,
+  onSelect,
   onAssign,
   onReject,
   isAssigning,
@@ -118,6 +122,8 @@ function ApplicationCard({
   application: Application
   choreStatus: string
   assignedWorkerId?: string | null
+  isSelected?: boolean
+  onSelect?: () => void
   onAssign: () => void
   onReject: () => void
   isAssigning: boolean
@@ -128,14 +134,20 @@ function ApplicationCard({
   const canAssign = application.status === 'PENDING' && !assignedWorkerId
   const isAccepted = application.status === 'ACCEPTED'
 
+  const isPending = application.status === 'PENDING'
+  
   return (
     <div
       className={cn(
-        'relative rounded-xl border p-4 transition-all',
+        'relative rounded-xl border p-4 transition-all cursor-pointer',
         isAccepted
           ? 'bg-emerald-50 dark:bg-emerald-900/10 border-emerald-200 dark:border-emerald-800 ring-2 ring-emerald-500/20'
-          : 'bg-card border-border hover:border-border/80 hover:shadow-sm'
+          : isSelected
+          ? 'bg-primary/5 border-primary/50 ring-2 ring-primary/20'
+          : 'bg-card border-border hover:border-border/80 hover:shadow-sm',
+        isPending && onSelect && 'hover:ring-2 hover:ring-primary/20'
       )}
+      onClick={() => isPending && onSelect?.()}
     >
       {/* Accepted badge */}
       {isAccepted && (
@@ -205,7 +217,23 @@ function ApplicationCard({
 
         {/* Action buttons - show when application is pending and chore is not assigned */}
         {canAssign && (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+            {isPending && onSelect && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onSelect()
+                }}
+                className="text-primary border-primary/50 hover:bg-primary/10"
+              >
+                <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                </svg>
+                Chat
+              </Button>
+            )}
             <Button
               variant="ghost"
               size="sm"
@@ -276,6 +304,8 @@ export default function CustomerApplicationsPanel({
   choreId,
   choreStatus,
   assignedWorkerId,
+  selectedApplicationId,
+  onSelectApplication,
 }: CustomerApplicationsPanelProps) {
   const router = useRouter()
   const toast = useToast()
@@ -448,6 +478,12 @@ export default function CustomerApplicationsPanel({
               application={app}
               choreStatus={choreStatus}
               assignedWorkerId={assignedWorkerId}
+              isSelected={selectedApplicationId === app.id}
+              onSelect={() => {
+                if (onSelectApplication) {
+                  onSelectApplication(selectedApplicationId === app.id ? null : app.id)
+                }
+              }}
               onAssign={() => handleAssign(app.id)}
               onReject={() => handleReject(app.id)}
               isAssigning={assigningId === app.id}

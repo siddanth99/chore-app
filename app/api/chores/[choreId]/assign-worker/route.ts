@@ -66,7 +66,7 @@ export async function POST(
     }
 
     // Verify chore status is OPEN
-    if (chore.status !== 'OPEN') {
+    if (!["OPEN", "PUBLISHED"].includes(chore.status)) {
       return NextResponse.json(
         { error: `Cannot assign worker. Chore status must be OPEN, but it is ${chore.status}` },
         { status: 400 }

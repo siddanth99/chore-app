@@ -3,21 +3,32 @@
 import { useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
+import { motion, AnimatePresence } from 'framer-motion'
+import { 
+  MapPin, Clock, Calendar, DollarSign, User, Star, 
+  CheckCircle, Send, ArrowLeft, Paperclip, MessageSquare,
+  Shield, Briefcase, Heart, ChevronRight, Award, Zap, X
+} from 'lucide-react'
 import { ChoreStatus, ChoreType } from '@prisma/client'
-import ChoreChat from '@/features/chat/chore-chat'
+import { ChatPanel } from '@/components/chat/ChatPanel'
 import MapPreview from '@/components/MapPreview'
 import Button from '@/components/ui/button'
 import Badge from '@/components/ui/Badge'
 import Card from '@/components/ui/Card'
+import { Textarea } from '@/components/ui/textarea'
+import { Input } from '@/components/ui/input'
 import { formatDate } from '@/lib/utils'
 import { cn } from '@/lib/utils'
+import { getCategoryIcon } from '@/components/chores/categories'
 import CustomerApplicationsPanel from '@/components/applications/CustomerApplicationsPanel'
 import { useToast } from '@/components/ui/toast'
+import ThemeToggle from '@/components/theme/ThemeToggle'
 
 interface ChoreDetailClientProps {
   chore: any
   currentUser: any
   initialApplications: any[] | null
+  userApplication?: any | null
   hasRated?: boolean
   assignedWorkerRating?: { average: number; count: number } | null
   latestCancellationRequest?: any | null
@@ -27,6 +38,7 @@ export default function ChoreDetailClient({
   chore,
   currentUser,
   initialApplications,
+  userApplication: initialUserApplication = null,
   hasRated: initialHasRated = false,
   assignedWorkerRating = null,
   latestCancellationRequest: initialLatestCancellationRequest = null,
@@ -65,6 +77,12 @@ export default function ChoreDetailClient({
   const [bidAmount, setBidAmount] = useState('')
   const [message, setMessage] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  
+  // Chat panel state
+  const [isChatOpen, setIsChatOpen] = useState(false)
+  
+  // Selected application for customer chat
+  const [selectedApplicationId, setSelectedApplicationId] = useState<string | null>(null)
 
   // Rating form state
   const [ratingScore, setRatingScore] = useState(5)
@@ -82,10 +100,10 @@ export default function ChoreDetailClient({
   const isNotOwner = currentUser && chore.createdById !== currentUser.id
   const isAssignedWorker = currentUser && chore.assignedWorkerId === currentUser.id
 
-  // Find user's application if they've applied (for non-owners)
-  const workerApplication = isNotOwner
+  // Use the userApplication prop (from server) or find from applications (fallback)
+  const workerApplication = initialUserApplication || (isNotOwner
     ? applications?.find((app) => app.workerId === currentUser?.id)
-    : null
+    : null)
 
   const hasApplied = !!workerApplication
   const isAssignedToSomeoneElse =
@@ -191,6 +209,8 @@ export default function ChoreDetailClient({
       // Add the new application to the list if it exists
       if (data.application) {
         setApplications((prev) => (prev ? [...prev, data.application] : [data.application]))
+        // Update workerApplication state to immediately show "Already Applied" UI
+        // The router.refresh() will also reload the page with the new userApplication prop
       }
       
       toast.success('Application sent! 🎉', 'The customer will review your application.')
@@ -270,20 +290,41 @@ export default function ChoreDetailClient({
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          amount: chore.budget, // rupees
           choreId: chore.id,
-          notes: { choreId: chore.id, source: 'chore-detail-page' },
+          // amount will be derived from chore.budget on the server
         }),
       });
 
       if (!orderResponse.ok) {
-        const errorText = await orderResponse.text();
-        console.error('Failed to create order:', {
+        // Robust error logging: try JSON first, then text, always log both
+        let errorBody: any = null;
+        let rawText: string | null = null;
+
+        try {
+          // Try JSON first
+          errorBody = await orderResponse.json();
+        } catch {
+          try {
+            rawText = await orderResponse.text();
+          } catch {
+            rawText = null;
+          }
+        }
+
+        console.error("Failed to create order:", {
           status: orderResponse.status,
           statusText: orderResponse.statusText,
-          response: errorText,
+          json: errorBody,
+          text: rawText,
         });
-        setError('Failed to create payment order. Please try again.');
+
+        // Extract user-friendly error message
+        const apiErrorMessage =
+          errorBody && typeof errorBody === "object" && "error" in errorBody
+            ? String(errorBody.error)
+            : rawText || "Failed to create payment order. Please try again.";
+
+        setError(apiErrorMessage);
         setLoading(false);
         return;
       }
@@ -592,16 +633,50 @@ export default function ChoreDetailClient({
     }
   }
 
+  // Helper component for Avatar
+  const Avatar = ({ name, size = 'md' }: { name: string; size?: 'sm' | 'md' | 'lg' }) => {
+    const sizes = { sm: 'w-8 h-8 text-xs', md: 'w-10 h-10 text-sm', lg: 'w-12 h-12 text-base' };
+    const initials = name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-slate-950 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="mx-auto max-w-4xl">
-        {/* Status debug line */}
-        <div className="mb-2 text-xs text-slate-500 dark:text-slate-400">
-          Status: {choreStatus} | View: {isOwner ? 'Owner' : isNotOwner ? 'Applicant' : 'Guest'}
+      <div className={cn(
+        sizes[size],
+        "rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center text-primary-foreground font-semibold"
+      )}>
+        {initials}
         </div>
+    );
+  };
 
-        {/* Back button - source aware */}
-        <button
+  // Helper component for Star Rating
+  const StarRating = ({ rating, reviews }: { rating: number; reviews?: number }) => (
+    <div className="flex items-center gap-1">
+      <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
+      <span className="font-semibold text-foreground">{rating.toFixed(1)}</span>
+      {reviews !== undefined && (
+        <span className="text-muted-foreground text-sm">({reviews})</span>
+      )}
+    </div>
+  );
+
+  // Determine chat mode
+  const chatMode = chore.assignedWorkerId ? 'post-assignment' : 'pre-assignment';
+  const otherPartyName = isOwner
+    ? (chore.assignedWorker?.name || 'Worker')
+    : (chore.createdBy?.name || 'Customer');
+
+  return (
+    <div className="min-h-screen bg-background">
+      {/* Page Header with Back Button */}
+      <motion.header
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl border-b border-border/50"
+      >
+        <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            className="gap-2"
           onClick={() => {
             if (typeof window !== 'undefined' && window.history.length > 1) {
               router.back()
@@ -609,14 +684,32 @@ export default function ChoreDetailClient({
             }
             router.push(backHref)
           }}
-          className="mb-4 inline-flex items-center gap-1 text-sm text-primary hover:text-primary/80 transition-colors"
-        >
-          {backLabel}
-        </button>
+          >
+            <ArrowLeft className="w-4 h-4" />
+            <span className="hidden sm:inline">{backLabel.replace('← ', '')}</span>
+          </Button>
+          
+          <div className="flex items-center gap-2">
+            <ThemeToggle />
+            <Button variant="ghost" size="sm">
+              <Heart className="w-5 h-5" />
+            </Button>
+          </div>
+        </div>
+      </motion.header>
 
+      {/* Main Content */}
+      <main className="w-full px-4 py-6 md:py-10 pb-24 md:pb-10">
+        {/* Wrapper to center and constrain the chore header card */}
+        <div className="w-full flex justify-center mb-6">
+          <div className="w-full max-w-5xl">
         {/* Cancelled Banner */}
         {choreStatus === 'CANCELLED' && (
-          <Card className="mb-6 border-2 border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20">
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+              >
+                <Card className="border-2 border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20">
             <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-50 mb-2">
               This chore has been cancelled.
             </h2>
@@ -626,34 +719,30 @@ export default function ChoreDetailClient({
               </p>
             )}
           </Card>
-        )}
+              </motion.div>
+            )}
 
-        {/* Chore details */}
-        <Card className="mb-6">
-          {/* Chore Image */}
-          {chore.imageUrl && (
-            <div className="mb-6 -mx-4 sm:-mx-6">
-              <img
-                src={chore.imageUrl}
-                alt={chore.title}
-                className="w-full h-64 object-cover rounded-t-xl"
-              />
-            </div>
-          )}
-          
-          <div className="mb-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-            <div className="flex-1">
-              <h1 className="text-3xl font-bold text-slate-900 dark:text-slate-50">{chore.title}</h1>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="flex gap-2">
-                <Badge variant={getTypeBadgeVariant(chore.type)}>
-                  {chore.type}
-                </Badge>
+            {/* Beautiful Gradient Chore Header */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5 }}
+              className="relative overflow-hidden rounded-2xl glass-card"
+            >
+              {/* Gradient Background */}
+              <div className="absolute inset-0 bg-gradient-to-br from-primary/10 via-transparent to-accent/10" />
+              <div className="absolute top-0 right-0 w-64 h-64 bg-primary/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
+              
+              <div className="relative p-6 md:p-8">
+                {/* Category & Status */}
+                <div className="flex flex-wrap items-center gap-3 mb-4">
+                  <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10 text-primary text-sm font-medium">
+                    <span>{getCategoryIcon(chore.category || '')}</span>
+                    {chore.category}
+                  </span>
                 <Badge variant={getStatusBadgeVariant(choreStatus)}>
                   {choreStatus.replace('_', ' ')}
                 </Badge>
-              </div>
               {isOwner &&
                 choreStatus !== 'COMPLETED' &&
                 choreStatus !== 'CANCELLED' &&
@@ -675,53 +764,174 @@ export default function ChoreDetailClient({
                     Cancel Chore
                   </Button>
                 )}
-            </div>
           </div>
 
-            <div className="mb-6 space-y-4">
+                {/* Title */}
+                <h1 className="text-2xl md:text-3xl font-bold text-foreground mb-4 leading-tight">
+                  {chore.title}
+                </h1>
+                
+                {/* Meta Grid */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                  {chore.budget && (
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <div className="p-2 rounded-lg bg-primary/10">
+                        <DollarSign className="w-4 h-4 text-primary" />
+                      </div>
               <div>
-                <h3 className="text-sm font-medium text-slate-500 dark:text-slate-400">Description</h3>
-                <p className="mt-1 whitespace-pre-wrap text-slate-700 dark:text-slate-300">
-                  {chore.description}
-                </p>
+                        <p className="text-xs text-muted-foreground">Budget</p>
+                        <p className="font-semibold text-foreground">₹{chore.budget.toLocaleString('en-IN')}</p>
+              </div>
+                    </div>
+                  )}
+                  
+                  {chore.type === 'OFFLINE' && chore.locationAddress && (
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <div className="p-2 rounded-lg bg-accent/10">
+                        <MapPin className="w-4 h-4 text-accent" />
+                </div>
+                <div>
+                        <p className="text-xs text-muted-foreground">Location</p>
+                        <p className="font-semibold text-foreground text-sm truncate">{chore.locationAddress}</p>
+                </div>
+                  </div>
+                )}
+                  
+                {chore.dueAt && (
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <div className="p-2 rounded-lg bg-highlight/10">
+                        <Clock className="w-4 h-4 text-highlight" />
+                      </div>
+                  <div>
+                        <p className="text-xs text-muted-foreground">Due Date</p>
+                        <p className="font-semibold text-foreground text-sm">{formatDate(chore.dueAt)}</p>
+                  </div>
+              </div>
+                  )}
+
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <div className="p-2 rounded-lg bg-muted">
+                      <Calendar className="w-4 h-4 text-muted-foreground" />
+                    </div>
+                <div>
+                      <p className="text-xs text-muted-foreground">Posted</p>
+                      <p className="font-semibold text-foreground text-sm">{formatDate(chore.createdAt)}</p>
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Chore Image */}
+                {chore.imageUrl && (
+                  <div className="relative h-32 md:h-40 rounded-xl overflow-hidden bg-muted/50 border border-border/50 mb-6">
+                    <img
+                      src={chore.imageUrl}
+                      alt={chore.title}
+                      className="w-full h-full object-cover"
+                    />
+                </div>
+              )}
+
+              {/* Location Map - Only for OFFLINE chores with coordinates */}
+              {chore.type === 'OFFLINE' &&
+                chore.locationLat &&
+                chore.locationLng && (
+                    <div className="relative h-32 md:h-40 rounded-xl overflow-hidden bg-muted/50 border border-border/50 mb-6">
+                    <MapPreview
+                      lat={chore.locationLat}
+                      lng={chore.locationLng}
+                        heightClass="h-full"
+                      markerLabel={chore.locationAddress || chore.title}
+                    />
+                  </div>
+                )}
+
+                {/* Customer Info */}
+                <div className="pt-6 border-t border-border/50">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <Avatar name={chore.createdBy?.name || 'User'} size="lg" />
+              <div>
+                        <div className="flex items-center gap-2">
+                          <p className="font-semibold text-foreground">{chore.createdBy?.name || 'User'}</p>
+                        </div>
+                        {chore.createdBy?.email && (
+                          <p className="text-xs text-muted-foreground">{chore.createdBy.email}</p>
+                        )}
+                      </div>
+                    </div>
+                    <Button variant="outline" size="sm" className="hidden md:flex gap-2">
+                      <MessageSquare className="w-4 h-4" />
+                      Message
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <h3 className="text-sm font-medium text-slate-500 dark:text-slate-400">Type</h3>
-                  <p className="mt-1 text-slate-700 dark:text-slate-300">{chore.type}</p>
+        {/* Lower Sections - Centered Layout */}
+        <div className="w-full flex justify-center px-4">
+          <div className="w-full max-w-5xl space-y-6 md:space-y-8">
+            {/* Chore Description Card */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.1 }}
+              className="rounded-2xl border border-border/50 bg-card/80 backdrop-blur-xl shadow-lg p-6 md:p-8"
+            >
+              <h2 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
+                <Briefcase className="w-5 h-5 text-primary" />
+                Description
+              </h2>
+              
+              <p className="text-muted-foreground leading-relaxed whitespace-pre-line mb-6">
+                {chore.description}
+              </p>
+              
+              {/* Payment Status */}
+              {chore.paymentStatus && (
+                <div className="mb-4 p-3 rounded-lg bg-muted/50 border border-border/50">
+                  <p className="text-xs text-muted-foreground mb-1">Payment Status</p>
+                  <p className={cn(
+                    "font-semibold",
+                    chore.paymentStatus === 'FUNDED' && "text-green-600 dark:text-green-400",
+                    chore.paymentStatus === 'PENDING' && "text-yellow-600 dark:text-yellow-400",
+                    chore.paymentStatus === 'UNPAID' && "text-red-600 dark:text-red-400",
+                    chore.paymentStatus === 'REFUNDED' && "text-gray-600 dark:text-gray-400"
+                  )}>
+                    {chore.paymentStatus === 'FUNDED' && 'Paid ✔ (funded)'}
+                    {chore.paymentStatus === 'PENDING' && 'Payment Pending...'}
+                    {chore.paymentStatus === 'UNPAID' && 'Unpaid'}
+                    {chore.paymentStatus === 'REFUNDED' && 'Refunded'}
+                  </p>
                 </div>
-                <div>
-                  <h3 className="text-sm font-medium text-slate-500 dark:text-slate-400">Category</h3>
-                  <p className="mt-1 text-slate-700 dark:text-slate-300">{chore.category}</p>
-                </div>
-                {chore.budget && (
-                  <div>
-                    <h3 className="text-sm font-medium text-slate-500 dark:text-slate-400">Budget</h3>
-                    <p className="mt-1 text-slate-700 dark:text-slate-300">₹{chore.budget}</p>
-                  </div>
-                )}
-                {chore.paymentStatus && (
-                  <div>
-                    <h3 className="text-sm font-medium text-slate-500 dark:text-slate-400">Payment Status</h3>
-                    <p className={cn(
-                      "mt-1 font-medium",
-                      chore.paymentStatus === 'FUNDED' && "text-green-600 dark:text-green-400",
-                      chore.paymentStatus === 'PENDING' && "text-yellow-600 dark:text-yellow-400",
-                      chore.paymentStatus === 'UNPAID' && "text-red-600 dark:text-red-400",
-                      chore.paymentStatus === 'REFUNDED' && "text-gray-600 dark:text-gray-400"
-                    )}>
-                      {chore.paymentStatus === 'FUNDED' && 'Paid ✔ (funded)'}
-                      {chore.paymentStatus === 'PENDING' && 'Payment Pending...'}
-                      {chore.paymentStatus === 'UNPAID' && 'Unpaid'}
-                      {chore.paymentStatus === 'REFUNDED' && 'Refunded'}
-                    </p>
-                  </div>
-                )}
-                {/* Owner: Pay for Chore button */}
-                {isOwner && chore.budget && chore.paymentStatus !== 'FUNDED' && chore.paymentStatus !== 'PENDING' && (
-                  <div>
-                    <h3 className="text-sm font-medium text-slate-500 dark:text-slate-400 mb-2">Fund This Chore</h3>
+              )}
+              
+              {/* Owner: Pay for Chore button - Show when payment is UNPAID or PENDING and chore is active */}
+              {(() => {
+                // Explicitly check all conditions for showing the pay button
+                // Allow both UNPAID and PENDING (PENDING means order created but not yet verified)
+                const isPaymentPendingOrUnpaid = 
+                  chore.paymentStatus === 'UNPAID' || 
+                  chore.paymentStatus === 'PENDING' || 
+                  chore.paymentStatus === null || 
+                  chore.paymentStatus === undefined;
+                
+                const isChoreStatusPayable = 
+                  choreStatus !== 'COMPLETED' &&
+                  choreStatus !== 'CLOSED' &&
+                  choreStatus !== 'CANCELED' &&
+                  choreStatus !== 'CANCELLED';
+                
+                const shouldShowPayButton = 
+                  isOwner && 
+                  chore.budget && 
+                  isPaymentPendingOrUnpaid && 
+                  isChoreStatusPayable;
+                
+                return shouldShowPayButton ? (
+                  <div className="mb-4">
                     <Button
                       onClick={handlePayForChore}
                       disabled={loading}
@@ -731,86 +941,59 @@ export default function ChoreDetailClient({
                       {loading ? 'Processing...' : `Pay ₹${chore.budget.toLocaleString('en-IN')}`}
                     </Button>
                   </div>
-                )}
-                {chore.dueAt && (
-                  <div>
-                    <h3 className="text-sm font-medium text-slate-500 dark:text-slate-400">Due Date</h3>
-                    <p className="mt-1 text-slate-700 dark:text-slate-300">
-                      {formatDate(chore.dueAt)}
-                    </p>
-                  </div>
-                )}
-              </div>
-
-              {chore.type === 'OFFLINE' && chore.locationAddress && (
-                <div>
-                  <h3 className="text-sm font-medium text-slate-500 dark:text-slate-400">Location</h3>
-                  <p className="mt-1 text-slate-700 dark:text-slate-300">{chore.locationAddress}</p>
+                ) : null;
+              })()}
+              
+              {/* Show message when payment is already completed */}
+              {isOwner && chore.paymentStatus === 'FUNDED' && (
+                <div className="mb-4 p-3 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
+                  <p className="text-sm text-green-700 dark:text-green-300 font-medium">
+                    ✓ Payment completed
+                  </p>
                 </div>
               )}
-
-              {/* Location Map - Only for OFFLINE chores with coordinates */}
-              {chore.type === 'OFFLINE' &&
-                chore.locationLat &&
-                chore.locationLng && (
-                  <div>
-                    <h3 className="text-sm font-medium text-slate-500 dark:text-slate-400 mb-2">
-                      Location Map
-                    </h3>
-                    <MapPreview
-                      lat={chore.locationLat}
-                      lng={chore.locationLng}
-                      heightClass="h-64"
-                      markerLabel={chore.locationAddress || chore.title}
-                    />
-                  </div>
-                )}
-
-              <div>
-                <h3 className="text-sm font-medium text-slate-500 dark:text-slate-400">Posted by</h3>
-                <p className="mt-1 text-slate-700 dark:text-slate-300">{chore.createdBy.name}</p>
-              </div>
-
+              
+              {/* Show message when payment is pending */}
+              {/* {isOwner && chore.paymentStatus === 'PENDING' && (
+                <div className="mb-4 p-3 rounded-lg bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800">
+                  <p className="text-sm text-yellow-700 dark:text-yellow-300 font-medium">
+                    Payment processing...
+                  </p>
+                </div>
+              )} */}
+              
+              {/* Assigned Worker Info */}
               {chore.assignedWorker && (
+                <div className="pt-4 border-t border-border/50">
+                  <p className="text-sm font-medium text-foreground mb-2">Assigned to</p>
+                  <div className="flex items-center gap-3">
+                    <Avatar name={chore.assignedWorker.name} size="md" />
                 <div>
-                  <h3 className="text-sm font-medium text-slate-500 dark:text-slate-400">Assigned to</h3>
-                  <div className="mt-1">
                     <Link
                       href={`/profile/${chore.assignedWorker.id}`}
-                      className="text-blue-600 hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300 font-medium transition-colors"
+                        className="font-semibold text-primary hover:underline"
                     >
                       {chore.assignedWorker.name}
                     </Link>
                     {assignedWorkerRating && assignedWorkerRating.count > 0 && (
-                      <div className="mt-1 flex items-center gap-2">
-                        <div className="flex items-center">
-                          {[1, 2, 3, 4, 5].map((star) => (
-                            <span
-                              key={star}
-                              className={`text-sm ${
-                                star <= Math.round(assignedWorkerRating.average)
-                                  ? 'text-yellow-400'
-                                  : 'text-slate-400 dark:text-slate-600'
-                              }`}
-                            >
-                              ★
-                            </span>
-                          ))}
-                        </div>
-                        <span className="text-sm text-slate-500 dark:text-slate-400">
-                          {assignedWorkerRating.average.toFixed(1)} ({assignedWorkerRating.count} reviews)
-                        </span>
-                      </div>
+                        <StarRating 
+                          rating={assignedWorkerRating.average} 
+                          reviews={assignedWorkerRating.count} 
+                        />
                     )}
                   </div>
                 </div>
-              )}
             </div>
-          </Card>
+              )}
+            </motion.div>
 
         {/* Error/Success messages */}
         {error && (
-          <div className="mb-6 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 p-4 flex items-start gap-3">
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="rounded-2xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 p-4 flex items-start gap-3"
+              >
             <div className="flex-shrink-0 p-1 rounded-full bg-red-100 dark:bg-red-800/50">
               <svg className="w-5 h-5 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
@@ -820,10 +1003,14 @@ export default function ChoreDetailClient({
               <p className="font-medium text-red-800 dark:text-red-200">Something went wrong</p>
               <p className="text-sm text-red-700 dark:text-red-300 mt-0.5">{error}</p>
             </div>
-          </div>
+              </motion.div>
         )}
         {success && (
-          <div className="mb-6 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 p-4 flex items-start gap-3">
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="rounded-2xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 p-4 flex items-start gap-3"
+              >
             <div className="flex-shrink-0 p-1 rounded-full bg-emerald-100 dark:bg-emerald-800/50">
               <svg className="w-5 h-5 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -833,136 +1020,168 @@ export default function ChoreDetailClient({
               <p className="font-medium text-emerald-800 dark:text-emerald-200">Success!</p>
               <p className="text-sm text-emerald-700 dark:text-emerald-300 mt-0.5">{success}</p>
             </div>
-          </div>
-        )}
+              </motion.div>
+            )}
 
-        {/* Worker: Status messages based on chore status */}
-        {isAssignedWorker && choreStatus === 'ASSIGNED' && chore.paymentStatus !== 'FUNDED' && (
-          <Card className="mb-6 border-2 border-yellow-200 dark:border-yellow-800 bg-yellow-50 dark:bg-yellow-900/20">
-            <p className="text-sm text-slate-700 dark:text-slate-300 font-medium">
-              You were assigned this job. Waiting for client payment to start.
-            </p>
-          </Card>
-        )}
-        {isAssignedWorker && choreStatus === 'FUNDED' && (
-          <Card className="mb-6 border-2 border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/20">
-            <p className="text-sm text-slate-700 dark:text-slate-300 font-medium mb-3">
-              ✔ Escrow Funded - You can now start the job
-            </p>
-            <Button
-              onClick={async () => {
-                try {
-                  const response = await fetch(`/api/chores/${chore.id}/start`, {
-                    method: 'POST',
-                  })
-                  if (response.ok) {
-                    toast.success('Job started', 'You have started working on this chore.')
-                    router.refresh()
-                  } else {
-                    const data = await response.json()
-                    toast.error('Failed to start', data.error || 'Please try again.')
-                  }
-                } catch (error) {
-                  toast.error('Error', 'Failed to start chore.')
-                }
-              }}
-              variant="primary"
-            >
-              Start Job
-            </Button>
-          </Card>
-        )}
-        {isAssignedWorker && choreStatus === 'IN_PROGRESS' && (
-          <Card className="mb-6 border-2 border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20">
-            <p className="text-sm text-slate-700 dark:text-slate-300 font-medium mb-3">
-              Job in progress - Mark as complete when finished
-            </p>
-            <Button
-              onClick={async () => {
-                try {
-                  const response = await fetch(`/api/chores/${chore.id}/complete`, {
-                    method: 'POST',
-                  })
-                  if (response.ok) {
-                    toast.success('Job completed', 'Waiting for client approval.')
-                    router.refresh()
-                  } else {
-                    const data = await response.json()
-                    toast.error('Failed to complete', data.error || 'Please try again.')
-                  }
-                } catch (error) {
-                  toast.error('Error', 'Failed to mark chore as complete.')
-                }
-              }}
-              variant="primary"
-            >
-              Mark as Complete
-            </Button>
-          </Card>
-        )}
-        {isAssignedWorker && choreStatus === 'COMPLETED' && (
-          <Card className="mb-6 border-2 border-purple-200 dark:border-purple-800 bg-purple-50 dark:bg-purple-900/20">
-            <p className="text-sm text-slate-700 dark:text-slate-300 font-medium">
-              ✔ Job completed - Awaiting client approval and payment release
-            </p>
-          </Card>
-        )}
-        {isAssignedWorker && choreStatus === 'CLOSED' && (
-          <Card className="mb-6 border-2 border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900/20">
-            <p className="text-sm text-slate-700 dark:text-slate-300 font-medium">
-              ✔ Job completed - Payment released
-            </p>
-          </Card>
-        )}
+            {/* Worker: Status messages based on chore status */}
+            {isAssignedWorker && choreStatus === 'ASSIGNED' && chore.paymentStatus !== 'FUNDED' && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="rounded-2xl border border-amber-500/30 bg-amber-500/10 backdrop-blur-xl shadow-lg p-6"
+              >
+                <p className="text-sm text-foreground font-medium">
+                  You were assigned this job. Waiting for client payment to start.
+                </p>
+              </motion.div>
+            )}
+            {isAssignedWorker && choreStatus === 'FUNDED' && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="rounded-2xl border border-green-500/30 bg-green-500/10 backdrop-blur-xl shadow-lg p-6"
+              >
+                <p className="text-sm text-foreground font-medium mb-4">
+                  ✔ Escrow Funded - You can now start the job
+                </p>
+                <Button
+                  onClick={async () => {
+                    try {
+                      const response = await fetch(`/api/chores/${chore.id}/start`, {
+                        method: 'POST',
+                      })
+                      if (response.ok) {
+                        toast.success('Job started', 'You have started working on this chore.')
+                        router.refresh()
+                      } else {
+                        const data = await response.json()
+                        toast.error('Failed to start', data.error || 'Please try again.')
+                      }
+                    } catch (error) {
+                      toast.error('Error', 'Failed to start chore.')
+                    }
+                  }}
+                  variant="primary"
+                >
+                  Start Job
+                </Button>
+              </motion.div>
+            )}
+            {isAssignedWorker && choreStatus === 'IN_PROGRESS' && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="rounded-2xl border border-blue-500/30 bg-blue-500/10 backdrop-blur-xl shadow-lg p-6"
+              >
+                <p className="text-sm text-foreground font-medium mb-4">
+                  Job in progress - Mark as complete when finished
+                </p>
+                <Button
+                  onClick={async () => {
+                    try {
+                      const response = await fetch(`/api/chores/${chore.id}/complete`, {
+                        method: 'POST',
+                      })
+                      if (response.ok) {
+                        toast.success('Job completed', 'Waiting for client approval.')
+                        router.refresh()
+                      } else {
+                        const data = await response.json()
+                        toast.error('Failed to complete', data.error || 'Please try again.')
+                      }
+                    } catch (error) {
+                      toast.error('Error', 'Failed to mark chore as complete.')
+                    }
+                  }}
+                  variant="primary"
+                >
+                  Mark as Complete
+                </Button>
+              </motion.div>
+            )}
+            {isAssignedWorker && choreStatus === 'COMPLETED' && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="rounded-2xl border border-purple-500/30 bg-purple-500/10 backdrop-blur-xl shadow-lg p-6"
+              >
+                <p className="text-sm text-foreground font-medium">
+                  ✔ Job completed - Awaiting client approval and payment release
+                </p>
+              </motion.div>
+            )}
+            {isAssignedWorker && choreStatus === 'CLOSED' && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="rounded-2xl border border-border/50 bg-card/80 backdrop-blur-xl shadow-lg p-6"
+              >
+                <p className="text-sm text-foreground font-medium">
+                  ✔ Job completed - Payment released
+                </p>
+              </motion.div>
+            )}
 
-        {/* Non-owner: Assigned to someone else - hide apply UI */}
-        {isNotOwner && isAssignedToSomeoneElse && (
-          <Card className="mb-6 border-2 border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900/20">
-            <p className="text-sm text-slate-700 dark:text-slate-300">
+            {/* Non-owner: Assigned to someone else - hide apply UI */}
+            {isNotOwner && isAssignedToSomeoneElse && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="rounded-2xl border border-border/50 bg-card/80 backdrop-blur-xl shadow-lg p-6"
+              >
+                <p className="text-sm text-foreground">
               This chore has been assigned to another worker.
             </p>
-          </Card>
-        )}
+              </motion.div>
+            )}
 
-        {/* Non-owner: Already applied - Show application summary */}
-        {isNotOwner && hasApplied && !isAssignedWorker && workerApplication && (
-          <Card className="mb-6 border-2 border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20">
+            {/* Non-owner: Already applied - Show application summary */}
+            {isNotOwner && hasApplied && !isAssignedWorker && workerApplication && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.4, delay: 0.2 }}
+                className="rounded-2xl border border-border/50 bg-gradient-to-br from-green-500/5 to-emerald-500/5 backdrop-blur-xl shadow-lg p-6 md:p-8"
+              >
             <div className="flex items-start gap-4">
-              <div className="flex-shrink-0 p-3 rounded-xl bg-emerald-100 dark:bg-emerald-800/50">
-                <svg className="w-6 h-6 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              </div>
+                  <motion.div
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    transition={{ type: 'spring', stiffness: 200, delay: 0.3 }}
+                    className="flex-shrink-0 p-3 rounded-xl bg-green-500/20"
+                  >
+                    <CheckCircle className="w-6 h-6 text-green-500" />
+                  </motion.div>
               <div className="flex-1">
-                <h3 className="text-lg font-semibold text-emerald-800 dark:text-emerald-200 mb-1">
+                    <h3 className="text-lg font-semibold text-foreground mb-1">
                   Application Submitted
                 </h3>
-                <p className="text-sm text-emerald-700 dark:text-emerald-300 mb-3">
+                    <p className="text-sm text-muted-foreground mb-4">
                   You&apos;ve already applied to this chore. Here&apos;s your application summary:
                 </p>
-                <div className="space-y-2 text-sm">
+                    <div className="space-y-4">
                   {workerApplication.bidAmount && (
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium text-emerald-800 dark:text-emerald-200">Your Bid:</span>
-                      <span className="text-emerald-700 dark:text-emerald-300">
-                        ₹{workerApplication.bidAmount.toLocaleString('en-IN')}
-                      </span>
+                        <div className="p-4 rounded-xl bg-background/50 border border-border/50">
+                          <p className="text-sm font-medium text-muted-foreground mb-1">Your Bid</p>
+                          <p className="text-2xl font-bold text-foreground">
+                            ₹{workerApplication.bidAmount.toLocaleString('en-IN')}
+                          </p>
                     </div>
                   )}
                   {workerApplication.message && (
-                    <div>
-                      <span className="font-medium text-emerald-800 dark:text-emerald-200">Your Message:</span>
-                      <p className="mt-1 text-emerald-700 dark:text-emerald-300 italic">&quot;{workerApplication.message}&quot;</p>
+                        <div className="p-4 rounded-xl bg-background/50 border border-border/50">
+                          <p className="text-sm font-medium text-muted-foreground mb-2">Your Message</p>
+                          <p className="text-foreground leading-relaxed">&quot;{workerApplication.message}&quot;</p>
                     </div>
                   )}
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium text-emerald-800 dark:text-emerald-200">Status:</span>
-                    <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
+                      <div className="flex items-center justify-between pt-4 border-t border-border/50">
+                        <span className="text-sm text-muted-foreground">Status:</span>
+                        <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
                       workerApplication.status === 'ACCEPTED' 
-                        ? 'bg-green-100 text-green-800 dark:bg-green-800/50 dark:text-green-200'
+                            ? 'bg-green-500/20 text-green-600 border border-green-500/30'
                         : workerApplication.status === 'REJECTED'
-                        ? 'bg-red-100 text-red-800 dark:bg-red-800/50 dark:text-red-200'
-                        : 'bg-amber-100 text-amber-800 dark:bg-amber-800/50 dark:text-amber-200'
+                            ? 'bg-red-500/20 text-red-600 border border-red-500/30'
+                            : 'bg-amber-500/20 text-amber-600 border border-amber-500/30'
                     }`}>
                       {workerApplication.status}
                     </span>
@@ -970,40 +1189,46 @@ export default function ChoreDetailClient({
                 </div>
               </div>
             </div>
-          </Card>
+              </motion.div>
         )}
 
         {/* Worker: Prominent Apply Now CTA */}
         {canApply && (
-          <Card className="mb-6 border-2 border-primary/30 bg-gradient-to-br from-primary/5 to-primary/10 dark:from-primary/10 dark:to-primary/5">
-            <div className="flex items-start gap-4">
-              <div className="flex-shrink-0 p-3 rounded-xl bg-primary/20">
-                <svg className="w-6 h-6 text-primary" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 14.15v4.25c0 1.094-.787 2.036-1.872 2.18-2.087.277-4.216.42-6.378.42s-4.291-.143-6.378-.42c-1.085-.144-1.872-1.086-1.872-2.18v-4.25m16.5 0a2.18 2.18 0 00.75-1.661V8.706c0-1.081-.768-2.015-1.837-2.175a48.114 48.114 0 00-3.413-.387m4.5 8.006c-.194.165-.42.295-.673.38A23.978 23.978 0 0112 15.75c-2.648 0-5.195-.429-7.577-1.22a2.016 2.016 0 01-.673-.38m0 0A2.18 2.18 0 013 12.489V8.706c0-1.081.768-2.015 1.837-2.175a48.111 48.111 0 013.413-.387m7.5 0V5.25A2.25 2.25 0 0013.5 3h-3a2.25 2.25 0 00-2.25 2.25v.894m7.5 0a48.667 48.667 0 00-7.5 0M12 12.75h.008v.008H12v-.008z" />
-                </svg>
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, delay: 0.2 }}
+                className="rounded-2xl border border-border/50 bg-gradient-to-br from-primary/10 via-primary/5 to-accent/5 backdrop-blur-xl shadow-lg p-6 md:p-8"
+              >
+              <div className="flex items-start gap-4">
+                <div className="flex-shrink-0 p-3 rounded-xl bg-primary/20">
+                    <Send className="w-6 h-6 text-primary" />
+                </div>
+                <div>
+                  <h3 className="mb-1 text-lg font-semibold text-foreground">
+                    Ready to take on this chore?
+                  </h3>
+                  <p className="text-sm text-muted-foreground">
+                    Submit your application and let the customer know why you&apos;re the best fit.
+                  </p>
+                </div>
               </div>
-              <div>
-                <h3 className="mb-1 text-lg font-semibold text-foreground">
-                  Ready to take on this chore?
-                </h3>
-                <p className="text-sm text-muted-foreground">
-                  Submit your application and let the customer know why you&apos;re the best fit.
-                </p>
-              </div>
-            </div>
-          </Card>
+              </motion.div>
         )}
 
         {/* Worker: Apply/Bid form */}
         {canApply && (
-          <div id="apply-form">
-            <Card className="mb-6 overflow-hidden">
+              <motion.div
+                id="apply-form"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, delay: 0.2 }}
+                className="rounded-2xl border border-border/50 bg-card/80 backdrop-blur-xl shadow-lg overflow-hidden"
+              >
               {/* Form Header */}
-              <div className="bg-gradient-to-r from-primary/10 to-primary/5 -mx-4 sm:-mx-6 -mt-4 sm:-mt-6 px-4 sm:px-6 py-4 mb-6 border-b border-primary/20">
+                <div className="bg-gradient-to-r from-primary/10 via-primary/5 to-accent/5 px-6 md:px-8 py-6 border-b border-primary/20">
                 <h2 className="text-xl font-semibold text-foreground flex items-center gap-2">
-                  <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
-                  </svg>
+                    <Send className="w-5 h-5 text-primary" />
                   Submit Your Application
                 </h2>
                 <p className="text-sm text-muted-foreground mt-1">
@@ -1011,7 +1236,7 @@ export default function ChoreDetailClient({
                 </p>
               </div>
 
-              <form onSubmit={handleApply} className="space-y-6">
+                <form onSubmit={handleApply} className="p-6 md:p-8 space-y-6">
                 {/* Message/Pitch Field */}
                 <div>
                   <label
@@ -1020,21 +1245,21 @@ export default function ChoreDetailClient({
                   >
                     Why are you a good fit? <span className="text-red-500">*</span>
                   </label>
-                  <p className="text-xs text-muted-foreground mb-2">
+                    <p className="text-xs text-muted-foreground mb-3">
                     Share your relevant experience and why you&apos;d be great for this job.
                   </p>
-                  <textarea
+                    <Textarea
                     id="message"
-                    rows={4}
+                      rows={5}
                     required
                     minLength={10}
                     placeholder="I'm a great fit for this chore because..."
-                    className="block w-full rounded-xl border border-border bg-background px-4 py-3 text-foreground placeholder:text-muted-foreground shadow-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+                      className="min-h-[120px] resize-none bg-background/50 border-border focus:border-primary focus:ring-primary/20"
                     value={message}
                     onChange={(e) => setMessage(e.target.value)}
                   />
                   {message.length > 0 && message.length < 10 && (
-                    <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+                      <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">
                       Please write at least 10 characters ({10 - message.length} more needed)
                     </p>
                   )}
@@ -1046,22 +1271,22 @@ export default function ChoreDetailClient({
                     htmlFor="bidAmount"
                     className="block text-sm font-semibold text-foreground mb-2"
                   >
-                    Your Expected Amount
+                      Your Expected Amount (₹)
                   </label>
-                  <p className="text-xs text-muted-foreground mb-2">
+                    <p className="text-xs text-muted-foreground mb-3">
                     {chore.budget 
-                      ? `The customer's budget is ₹${chore.budget}. You can match it or propose a different amount.`
+                        ? `The customer's budget is ₹${chore.budget.toLocaleString('en-IN')}. You can match it or propose a different amount.`
                       : 'No budget specified. Propose your rate for this job.'}
                   </p>
                   <div className="relative">
-                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground font-medium">₹</span>
-                    <input
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground font-medium">₹</span>
+                      <Input
                       type="number"
                       id="bidAmount"
                       min="0"
                       step="1"
                       placeholder={chore.budget ? String(chore.budget) : 'Enter amount'}
-                      className="block w-full rounded-xl border border-border bg-background pl-8 pr-4 py-3 text-foreground placeholder:text-muted-foreground shadow-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+                        className="pl-8 bg-background/50 border-border focus:border-primary focus:ring-primary/20"
                       value={bidAmount}
                       onChange={(e) => setBidAmount(e.target.value)}
                     />
@@ -1069,13 +1294,17 @@ export default function ChoreDetailClient({
                 </div>
 
                 {/* Submit Button */}
-                <div className="pt-2">
+                  <motion.div
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    className="pt-2"
+                  >
                   <Button
                     type="submit"
                     disabled={submitting || message.length < 10}
                     variant="primary"
                     size="lg"
-                    className="w-full shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="w-full bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary text-primary-foreground font-semibold py-6 text-base shadow-glow disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {submitting ? (
                       <>
@@ -1087,50 +1316,108 @@ export default function ChoreDetailClient({
                       </>
                     ) : (
                       <>
-                        <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" />
-                        </svg>
+                          <Send className="w-5 h-5 mr-2" />
                         Submit Application
                       </>
                     )}
                   </Button>
-                </div>
+                  </motion.div>
+                  
+                  <p className="text-center text-xs text-muted-foreground">
+                    By applying, you agree to our terms and conditions
+                  </p>
               </form>
-            </Card>
-          </div>
+              </motion.div>
         )}
 
         {/* Customer: Applications Panel */}
         {isOwner && applications && (
+              <div className="w-full max-w-5xl mx-auto px-4 space-y-6">
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.5, delay: 0.2 }}
+                >
           <CustomerApplicationsPanel
             applications={applications}
             choreId={chore.id}
             choreStatus={choreStatus}
-            assignedWorkerId={chore.assignedWorkerId}
-          />
+                    assignedWorkerId={chore.assignedWorkerId}
+                    selectedApplicationId={selectedApplicationId}
+                    onSelectApplication={setSelectedApplicationId}
+                  />
+                </motion.div>
+
+                {/* Pre-assignment chat for customer */}
+                {!chore.assignedWorkerId && selectedApplicationId && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.5, delay: 0.3 }}
+                    className="rounded-2xl border border-border/50 bg-card/80 backdrop-blur-xl shadow-lg overflow-hidden"
+                  >
+                    <div className="h-[500px]">
+                      <ChatPanel
+                        mode="pre-assignment"
+                        choreId={chore.id}
+                        currentUserId={currentUser.id}
+                        choreTitle={chore.title}
+                        otherPartyName={
+                          applications.find((app) => app.id === selectedApplicationId)?.worker
+                            .name || 'Worker'
+                        }
+                        isOpen={true}
+                      />
+                    </div>
+                  </motion.div>
+                )}
+
+                {/* Prompt to select application for chat */}
+                {!chore.assignedWorkerId &&
+                  !selectedApplicationId &&
+                  applications.length > 0 &&
+                  applications.some((app) => app.status === 'PENDING') && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="rounded-2xl border border-border/50 bg-card/80 backdrop-blur-xl shadow-lg p-6"
+                    >
+                      <div className="flex items-center gap-3 text-muted-foreground">
+                        <MessageSquare className="w-5 h-5" />
+                        <p className="text-sm">
+                          Select an applicant to start a clarification chat.
+                        </p>
+                      </div>
+                    </motion.div>
+                  )}
+              </div>
         )}
 
         {/* Customer: Cancellation Request Decision */}
         {isOwner &&
           choreStatus === 'CANCELLATION_REQUESTED' &&
           latestCancellationRequest && (
-            <Card className="mb-6 border-2 border-yellow-200 dark:border-yellow-800 bg-yellow-50 dark:bg-yellow-900/20">
-              <h2 className="mb-4 text-xl font-semibold text-slate-900 dark:text-slate-50">
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="rounded-2xl border border-amber-500/30 bg-amber-500/10 backdrop-blur-xl shadow-lg p-6 md:p-8"
+                >
+                  <h2 className="mb-4 text-xl font-semibold text-foreground">
                 Cancellation Requested
               </h2>
               <div className="space-y-4">
                 <div>
-                  <p className="text-sm text-slate-700 dark:text-slate-300 mb-2">
+                      <p className="text-sm text-foreground mb-2">
                     <span className="font-medium">Worker:</span>{' '}
                     {latestCancellationRequest.requestedBy?.name || 'Unknown'}
                   </p>
                   {latestCancellationRequest.reason ? (
-                    <p className="text-sm text-slate-700 dark:text-slate-300">
+                        <p className="text-sm text-foreground">
                       <span className="font-medium">Reason:</span>{' '}
                       {latestCancellationRequest.reason}
                     </p>
                   ) : (
-                    <p className="text-sm text-slate-500 dark:text-slate-400">
+                        <p className="text-sm text-muted-foreground">
                       No reason provided
                     </p>
                   )}
@@ -1152,49 +1439,22 @@ export default function ChoreDetailClient({
                   </Button>
                 </div>
               </div>
-            </Card>
-          )}
-
-        {/* Assigned Worker: Status update buttons */}
-        {isAssignedWorker && (
-          <Card className="mb-6">
-            <h2 className="mb-4 text-xl font-semibold text-slate-900 dark:text-slate-50">
-              Update Status
-            </h2>
-            <div className="flex gap-3">
-              {choreStatus === 'ASSIGNED' && (
-                <Button
-                  onClick={() => handleStatusUpdate('start')}
-                  disabled={loading}
-                  variant="primary"
-                  className="bg-purple-600 hover:bg-purple-500 dark:bg-purple-500 dark:hover:bg-purple-400"
-                >
-                  {loading ? 'Updating...' : 'Start Chore'}
-                </Button>
-              )}
-              {choreStatus === 'IN_PROGRESS' && (
-                <Button
-                  onClick={() => handleStatusUpdate('complete')}
-                  disabled={loading}
-                  variant="primary"
-                  className="bg-green-600 hover:bg-green-500 dark:bg-green-500 dark:hover:bg-green-400"
-                >
-                  {loading ? 'Updating...' : 'Mark as Completed'}
-                </Button>
-              )}
-            </div>
-          </Card>
+                </motion.div>
         )}
 
         {/* Worker: Request Cancellation */}
         {isAssignedWorker &&
           (choreStatus === 'ASSIGNED' || choreStatus === 'IN_PROGRESS') &&
           !latestCancellationRequest && (
-            <Card className="mb-6">
-              <h2 className="mb-4 text-xl font-semibold text-slate-900 dark:text-slate-50">
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="rounded-2xl border border-border/50 bg-card/80 backdrop-blur-xl shadow-lg p-6 md:p-8"
+                >
+                  <h2 className="mb-4 text-xl font-semibold text-foreground">
                 Request Cancellation
               </h2>
-              <p className="mb-4 text-sm text-slate-700 dark:text-slate-300">
+                  <p className="mb-4 text-sm text-muted-foreground">
                 If you need to cancel this chore, you can request cancellation. The customer will
                 need to approve or reject your request.
               </p>
@@ -1205,7 +1465,7 @@ export default function ChoreDetailClient({
               >
                 {loading ? 'Submitting...' : 'Request Cancellation'}
               </Button>
-            </Card>
+                </motion.div>
           )}
 
         {/* Worker: Cancellation Requested Status */}
@@ -1213,20 +1473,28 @@ export default function ChoreDetailClient({
           choreStatus === 'CANCELLATION_REQUESTED' &&
           latestCancellationRequest &&
           latestCancellationRequest.requestedById === currentUser?.id && (
-            <Card className="mb-6 border-2 border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20">
-              <h2 className="mb-2 text-xl font-semibold text-slate-900 dark:text-slate-50">
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="rounded-2xl border border-blue-500/30 bg-blue-500/10 backdrop-blur-xl shadow-lg p-6"
+                >
+                  <h2 className="mb-2 text-xl font-semibold text-foreground">
                 Cancellation Requested
               </h2>
-              <p className="text-sm text-slate-700 dark:text-slate-300">
+                  <p className="text-sm text-foreground">
                 You have requested cancellation. Waiting for customer&apos;s decision.
               </p>
-            </Card>
+                </motion.div>
           )}
 
         {/* Rating for this chore - Read-only card visible to all users */}
         {choreRating && (
-          <Card className="mb-6">
-            <h2 className="mb-4 text-xl font-semibold text-slate-800 dark:text-slate-100">
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="rounded-2xl border border-border/50 bg-card/80 backdrop-blur-xl shadow-lg p-6 md:p-8"
+              >
+                <h2 className="mb-4 text-xl font-semibold text-foreground">
               Rating for this Chore
             </h2>
               <div className="space-y-3">
@@ -1243,32 +1511,36 @@ export default function ChoreDetailClient({
                       ★
                     </span>
                   ))}
-                  <span className="ml-2 text-sm font-medium text-slate-900 dark:text-slate-50">
+                    <span className="ml-2 text-sm font-medium text-foreground">
                     {choreRating.score}/5
                   </span>
                 </div>
                 {choreRating.comment && (
-                  <p className="text-sm text-slate-700 dark:text-slate-300">{choreRating.comment}</p>
+                    <p className="text-sm text-muted-foreground">{choreRating.comment}</p>
                 )}
-                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  <p className="text-xs text-muted-foreground">
                   By {choreRating.fromUser.name}
                 </p>
               </div>
-            </Card>
+              </motion.div>
         )}
 
-        {/* Rating Form - Only for owner after COMPLETED */}
+            {/* Rating Form - Only for owner after COMPLETED */}
         {currentUser &&
           isOwner &&
           choreStatus === 'COMPLETED' &&
           !hasRated && (
-            <Card className="mb-6">
-              <h2 className="mb-4 text-xl font-semibold text-slate-800 dark:text-slate-100">
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="rounded-2xl border border-border/50 bg-card/80 backdrop-blur-xl shadow-lg p-6 md:p-8"
+                >
+                  <h2 className="mb-4 text-xl font-semibold text-foreground">
                 Rate Worker
               </h2>
                 <form onSubmit={handleSubmitRating} className="space-y-4">
                   <div>
-                    <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">
+                      <label className="mb-2 block text-sm font-medium text-foreground">
                       Rating (1-5 stars)
                     </label>
                     <div className="flex items-center gap-2">
@@ -1286,7 +1558,7 @@ export default function ChoreDetailClient({
                           ★
                         </button>
                       ))}
-                      <span className="ml-2 text-sm text-slate-500 dark:text-slate-400">
+                        <span className="ml-2 text-sm text-muted-foreground">
                         ({ratingScore}/5)
                       </span>
                     </div>
@@ -1294,14 +1566,14 @@ export default function ChoreDetailClient({
                   <div>
                     <label
                       htmlFor="ratingComment"
-                      className="block text-sm font-medium text-slate-700 dark:text-slate-300"
+                        className="block text-sm font-medium text-foreground"
                     >
                       Comment (optional)
                     </label>
-                    <textarea
+                      <Textarea
                       id="ratingComment"
                       rows={4}
-                      className="mt-1 block w-full rounded-md border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-slate-700 dark:text-slate-300 placeholder-gray-400 dark:placeholder-slate-500 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 sm:text-sm"
+                        className="mt-1 bg-background/50 border-border focus:border-primary focus:ring-primary/20"
                       value={ratingComment}
                       onChange={(e) => setRatingComment(e.target.value)}
                       placeholder="Share your experience..."
@@ -1315,49 +1587,212 @@ export default function ChoreDetailClient({
                     {submittingRating ? 'Submitting...' : 'Submit Rating'}
                   </Button>
                 </form>
-              </Card>
+                </motion.div>
           )}
 
-        {/* Rating info message - show when COMPLETED but user is not owner */}
+            {/* Rating info message - show when COMPLETED but user is not owner */}
         {choreStatus === 'COMPLETED' &&
           currentUser &&
           !isOwner && (
-            <Card className="mb-6">
-              <h2 className="mb-2 text-xl font-semibold text-slate-900 dark:text-slate-50">Rating</h2>
-              <p className="text-sm text-slate-700 dark:text-slate-300">
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="rounded-2xl border border-border/50 bg-card/80 backdrop-blur-xl shadow-lg p-6"
+                >
+                  <h2 className="mb-2 text-xl font-semibold text-foreground">Rating</h2>
+                  <p className="text-sm text-muted-foreground">
                 Only the customer can rate this chore.
               </p>
-            </Card>
-          )}
+                </motion.div>
+              )}
 
-        {/* Chat - Only visible when assigned and status allows */}
-        {currentUser &&
-          (isOwner || isAssignedWorker) &&
-          chore.assignedWorkerId &&
-          (choreStatus === 'ASSIGNED' ||
-            choreStatus === 'IN_PROGRESS' ||
-            choreStatus === 'COMPLETED') && (
-            <Card className="mb-6">
-              <h2 className="mb-4 text-xl font-semibold text-slate-800 dark:text-slate-100">Chat</h2>
-              <ChoreChat choreId={chore.id} currentUserId={currentUser.id} />
-            </Card>
-          )}
+            {/* Payout Status Card - Show for completed chores with assigned worker */}
+            {/* TODO: Re-enable payout status card when Razorpay payouts integration is complete. */}
+            {/* Temporarily disabled - entire payout status card section commented out */}
+            {/*
+            {choreStatus === 'COMPLETED' && chore.assignedWorkerId && (() => {
+              const latestPayout = (chore.workerPayouts && Array.isArray(chore.workerPayouts) && chore.workerPayouts.length > 0)
+                ? chore.workerPayouts[0]
+                : null
+
+              const payoutAmount = latestPayout?.amount ? latestPayout.amount / 100 : null
+
+              return (
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="rounded-2xl border border-border/50 bg-card/80 backdrop-blur-xl shadow-lg p-6"
+                >
+                  <h2 className="mb-4 text-xl font-semibold text-foreground flex items-center gap-2">
+                    <DollarSign className="w-5 h-5 text-primary" />
+                    Worker Payout Status
+                  </h2>
+
+                  {!latestPayout ? (
+                    <p className="text-sm text-muted-foreground">
+                      Payout not initiated yet
+                    </p>
+                  ) : latestPayout.status === 'PENDING' ? (
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 text-yellow-600 dark:text-yellow-400">
+                        <Clock className="w-4 h-4" />
+                        <span className="text-sm font-medium">Payout processing via Razorpay...</span>
+                      </div>
+                      {payoutAmount && (
+                        <p className="text-xs text-muted-foreground">
+                          Amount: ₹{payoutAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </p>
+                      )}
+                    </div>
+                  ) : latestPayout.status === 'SUCCESS' ? (
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 text-green-600 dark:text-green-400">
+                        <CheckCircle className="w-4 h-4" />
+                        <span className="text-sm font-medium">
+                          Payout of ₹{payoutAmount?.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || 'N/A'} sent to worker
+                        </span>
+                      </div>
+                      {latestPayout.razorpayPayoutId && (
+                        <p className="text-xs text-muted-foreground">
+                          Razorpay ID: {latestPayout.razorpayPayoutId}
+                        </p>
+                      )}
+                    </div>
+                  ) : latestPayout.status === 'FAILED' ? (
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2 text-red-600 dark:text-red-400">
+                        <X className="w-4 h-4" />
+                        <span className="text-sm font-medium">Payout failed</span>
+                      </div>
+                      {latestPayout.errorMessage && (
+                        <p className="text-xs text-muted-foreground">
+                          Error: {latestPayout.errorMessage}
+                        </p>
+                      )}
+                      {(isOwner || currentUser?.role === 'ADMIN') && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={async () => {
+                            try {
+                              const response = await fetch('/api/payouts/retry', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ payoutId: latestPayout.id }),
+                              })
+
+                              const data = await response.json()
+
+                              if (response.ok) {
+                                toast.success('Payout retry initiated', 'Please check back in a few moments.')
+                                router.refresh()
+                              } else {
+                                toast.error('Payout retry failed', data.error || 'Failed to retry payout. Please try again later.')
+                              }
+                            } catch (error) {
+                              toast.error('Error', 'An error occurred while retrying the payout.')
+                            }
+                          }}
+                          className="mt-2"
+                        >
+                          Retry payout
+                        </Button>
+                      )}
+                    </div>
+                  ) : null}
+                </motion.div>
+              )
+            })()}
+            */}
+
+            {/* New ChatPanel Integration */}
+            {/* Pre-assignment mode: Worker has applied but not assigned */}
+            {isNotOwner && hasApplied && !chore.assignedWorkerId && (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, delay: 0.2 }}
+                className="rounded-2xl border border-border/50 bg-card/80 backdrop-blur-xl shadow-lg overflow-hidden"
+              >
+                  <div className="h-[500px]">
+                    <ChatPanel
+                      mode="pre-assignment"
+                      choreId={chore.id}
+                      currentUserId={currentUser.id}
+                      choreTitle={chore.title}
+                      otherPartyName={chore.createdBy?.name || 'Customer'}
+                      isOpen={true}
+                      />
+                    </div>
+              </motion.div>
+            )}
+
+            {/* Post-assignment mode: Worker assigned, chat available */}
+            {(() => {
+              // Chat is enabled when worker is assigned and status is not terminal
+              const hasWorker = !!chore.assignedWorkerId;
+              const isTerminalStatus = [
+                'CLOSED',
+                'CANCELED',
+                'CANCELLED',
+              ].includes(choreStatus);
+              const isChatEnabled = hasWorker && !isTerminalStatus;
+
+              return currentUser &&
+                (isOwner || isAssignedWorker) &&
+                isChatEnabled ? (
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.5, delay: 0.2 }}
+                  className="rounded-2xl border border-border/50 bg-card/80 backdrop-blur-xl shadow-lg overflow-hidden"
+                >
+                  <div className="h-[500px]">
+                    <ChatPanel
+                      mode="post-assignment"
+                      choreId={chore.id}
+                      currentUserId={currentUser.id}
+                      choreTitle={chore.title}
+                      otherPartyName={
+                        isOwner
+                          ? chore.assignedWorker?.name || 'Worker'
+                          : chore.createdBy?.name || 'Customer'
+                      }
+                      isOpen={true}
+                    />
+                </div>
+                </motion.div>
+              ) : null;
+            })()}
 
         {/* Chat unavailable message - show when user is owner/assigned worker but chat not available yet */}
-        {currentUser &&
+            {(() => {
+              const hasWorker = !!chore.assignedWorkerId;
+              const isTerminalStatus = [
+                'CLOSED',
+                'CANCELED',
+                'CANCELLED',
+              ].includes(choreStatus);
+              const isChatEnabled = hasWorker && !isTerminalStatus;
+
+              return currentUser &&
           (isOwner || isAssignedWorker) &&
-          (!chore.assignedWorkerId ||
-            (choreStatus !== 'ASSIGNED' &&
-              choreStatus !== 'IN_PROGRESS' &&
-              choreStatus !== 'COMPLETED')) && (
-            <Card className="mb-6">
-              <h2 className="mb-2 text-xl font-semibold text-slate-800 dark:text-slate-100">Chat</h2>
-              <p className="text-sm text-slate-500 dark:text-slate-400">
+                !isChatEnabled ? (
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="rounded-2xl border border-border/50 bg-card/80 backdrop-blur-xl shadow-lg p-6"
+                >
+                  <h2 className="mb-2 text-xl font-semibold text-foreground">Chat</h2>
+                  <p className="text-sm text-muted-foreground">
                 Chat becomes available once the chore has been assigned to a worker.
               </p>
-            </Card>
-          )}
+                </motion.div>
+              ) : null;
+            })()}
       </div>
+        </div>
+      </main>
     </div>
   )
 }

@@ -1,12 +1,17 @@
 // TODO: Legacy dashboard UI. Candidate for removal after v2 dashboard is fully verified in production.
 // See components/dashboard/LovableDashboardChoreCard.tsx for the new Lovable UI implementation.
 
+'use client'
+
 import Link from 'next/link'
+import { useState } from 'react'
 import { formatDate, cn } from '@/lib/utils'
 import { ChoreStatus, ChoreType } from '@prisma/client'
 import Badge from '@/components/ui/Badge'
 import Card from '@/components/ui/Card'
 import Button from '@/components/ui/button'
+import { useRouter } from 'next/navigation'
+import toast from 'react-hot-toast'
 
 interface DashboardChoreCardProps {
   chore: any
@@ -57,6 +62,9 @@ export default function DashboardChoreCard({
   showEarnings = false,
   showRateButton = false,
 }: DashboardChoreCardProps) {
+  const router = useRouter()
+  const [isRetryingPayout, setIsRetryingPayout] = useState(false)
+
   // Calculate earnings (bidAmount from ACCEPTED app, or budget fallback)
   const earnings =
     showEarnings && chore.applications && chore.applications.length > 0
@@ -65,6 +73,35 @@ export default function DashboardChoreCard({
 
   // Get rating if available
   const rating = showRating && chore.ratings && chore.ratings.length > 0 ? chore.ratings[0] : null
+
+  // TODO: Re-enable workerPayouts when Razorpay payouts integration is complete.
+  // Get latest payout for completed chores
+  const latestPayout = null // Temporarily disabled: chore.workerPayouts && chore.workerPayouts.length > 0 ? (chore.workerPayouts as any[])[0] : null
+
+  // Handle payout retry
+  const handleRetryPayout = async (payoutId: string) => {
+    setIsRetryingPayout(true)
+    try {
+      const response = await fetch('/api/payouts/retry', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ payoutId }),
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        toast.success('Payout retry initiated. Please check back in a few moments.')
+        router.refresh()
+      } else {
+        toast.error(data.error || 'Failed to retry payout. Please try again later.')
+      }
+    } catch (error) {
+      toast.error('An error occurred while retrying the payout.')
+    } finally {
+      setIsRetryingPayout(false)
+    }
+  }
 
   return (
     <Card
@@ -180,6 +217,44 @@ export default function DashboardChoreCard({
               </Link>
             </div>
           )}
+
+          {/* Payout Status for Completed Chores */}
+          {/* TODO: Re-enable payout status display when Razorpay payouts integration is complete. */}
+          {/* Temporarily disabled - entire payout status section commented out */}
+          {/*
+          {chore.status === 'COMPLETED' && (
+            <div className="pt-2">
+              {!latestPayout ? (
+                <div className="flex items-center text-sm text-slate-500 dark:text-slate-400">
+                  <span>💰 Payout not initiated yet</span>
+                </div>
+              ) : latestPayout.status === 'PENDING' ? (
+                <div className="flex items-center text-sm text-yellow-600 dark:text-yellow-400">
+                  <span>⏳ Payout processing...</span>
+                </div>
+              ) : latestPayout.status === 'SUCCESS' ? (
+                <div className="flex items-center text-sm text-green-600 dark:text-green-400">
+                  <span>✅ Payout received</span>
+                </div>
+              ) : latestPayout.status === 'FAILED' ? (
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-red-600 dark:text-red-400">
+                    ❌ Payout failed
+                  </span>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => handleRetryPayout(latestPayout.id)}
+                    disabled={isRetryingPayout}
+                    className="h-7 text-xs"
+                  >
+                    {isRetryingPayout ? 'Retrying...' : 'Retry payout'}
+                  </Button>
+                </div>
+              ) : null}
+            </div>
+          )}
+          */}
         </div>
 
         <div className="flex items-center justify-between pt-4 border-t border-gray-200 dark:border-slate-700">

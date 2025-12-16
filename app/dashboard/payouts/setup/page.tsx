@@ -10,10 +10,33 @@ export default function PayoutSetupPage() {
   const router = useRouter()
   const toast = useToast()
   const [upiId, setUpiId] = useState('')
+  const [payoutsEnabled, setPayoutsEnabled] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [loadingSettings, setLoadingSettings] = useState(true)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
-  const [isMockMode, setIsMockMode] = useState(false)
+
+  // Load saved settings on mount
+  useEffect(() => {
+    const loadSettings = async () => {
+      try {
+        const res = await fetch('/api/worker/payout-settings')
+        if (res.ok) {
+          const data = await res.json()
+          if (data) {
+            setUpiId(data.upiId ?? '')
+            setPayoutsEnabled(Boolean(data.payoutsEnabled))
+          }
+        }
+      } catch (err) {
+        console.error('Error loading payout settings:', err)
+      } finally {
+        setLoadingSettings(false)
+      }
+    }
+
+    loadSettings()
+  }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -34,6 +57,27 @@ export default function PayoutSetupPage() {
     }
 
     try {
+      // First, save the payout settings (UPI ID and toggle)
+      const settingsResponse = await fetch('/api/worker/payout-settings', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          payoutUpiId: upiId.trim(),
+          payoutsEnabled: true,
+        }),
+      })
+
+      const settingsData = await settingsResponse.json()
+
+      if (!settingsResponse.ok) {
+        toast.error('Failed to save settings', settingsData.error || 'Please try again.')
+        setError(settingsData.error || 'Failed to save payout settings')
+        return
+      }
+
+      // Then, complete Razorpay onboarding if needed
       const response = await fetch('/api/payouts/onboard', {
         method: 'POST',
         headers: {
@@ -47,20 +91,19 @@ export default function PayoutSetupPage() {
       if (!response.ok) {
         if (response.status === 400 && data.error === 'Payout onboarding already completed') {
           setSuccess(true)
-          setIsMockMode(data.mode === 'mock')
           toast.success('Already onboarded', 'You have already enabled payouts.')
           setTimeout(() => {
             router.push('/dashboard/payouts')
           }, 2000)
           return
         }
-        toast.error('Failed to enable payouts', data.error || 'Please try again.')
-        setError(data.error || 'Failed to enable payouts')
+        // Settings are saved, but onboarding failed - that's okay, settings persist
+        toast.error('Onboarding incomplete', data.error || 'Settings saved, but Razorpay onboarding failed. Please try again.')
+        setError(data.error || 'Razorpay onboarding failed')
         return
       }
 
       setSuccess(true)
-      setIsMockMode(data.mode === 'mock')
       toast.success('Payouts enabled! 🎉', 'You can now receive payments for completed jobs.')
       setTimeout(() => {
         router.push('/dashboard/payouts')
@@ -99,13 +142,6 @@ export default function PayoutSetupPage() {
             <p className="text-slate-600 dark:text-slate-400 mb-4">
               Your payouts are now enabled. You can receive payments for completed jobs directly to your UPI ID.
             </p>
-            {isMockMode && (
-              <div className="mb-4 p-3 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
-                <p className="text-sm text-blue-800 dark:text-blue-200">
-                  ⚠️ Running in test mode. No real money is moved.
-                </p>
-              </div>
-            )}
             <Button
               onClick={() => router.push('/dashboard/payouts')}
               variant="primary"
@@ -131,34 +167,41 @@ export default function PayoutSetupPage() {
         </div>
 
         <Card>
-          <div className="mb-6">
-            <div className="flex items-start gap-3 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-              <svg
-                className="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth={2}
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z"
-                />
-              </svg>
-              <div>
-                <h3 className="font-semibold text-blue-900 dark:text-blue-100 mb-1">
-                  Why enable payouts?
-                </h3>
-                <p className="text-sm text-blue-800 dark:text-blue-200">
-                  You must complete payout onboarding before you can be assigned to jobs. Once enabled, payments will be
-                  automatically transferred to your UPI ID when clients approve your completed work.
-                </p>
-              </div>
+          {loadingSettings ? (
+            <div className="py-12 text-center">
+              <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+              <p className="mt-4 text-sm text-muted-foreground">Loading settings...</p>
             </div>
-          </div>
+          ) : (
+            <>
+              <div className="mb-6">
+                <div className="flex items-start gap-3 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                  <svg
+                    className="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z"
+                    />
+                  </svg>
+                  <div>
+                    <h3 className="font-semibold text-blue-900 dark:text-blue-100 mb-1">
+                      Why enable payouts?
+                    </h3>
+                    <p className="text-sm text-blue-800 dark:text-blue-200">
+                      You must complete payout onboarding before you can be assigned to jobs. Once enabled, payments will be
+                      automatically transferred to your UPI ID when clients approve your completed work.
+                    </p>
+                  </div>
+                </div>
+              </div>
 
-          <form onSubmit={handleSubmit} className="space-y-6">
+              <form onSubmit={handleSubmit} className="space-y-6">
             <div>
               <label
                 htmlFor="upiId"
@@ -178,6 +221,35 @@ export default function PayoutSetupPage() {
                 onChange={(e) => setUpiId(e.target.value)}
                 className="block w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 shadow-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
               />
+            </div>
+
+            {/* Enable/Disable Payouts Toggle */}
+            <div>
+              <label className="flex items-center justify-between cursor-pointer">
+                <div>
+                  <span className="block text-sm font-semibold text-slate-900 dark:text-slate-50">
+                    Enable Payouts
+                  </span>
+                  <span className="block text-xs text-slate-600 dark:text-slate-400 mt-1">
+                    Allow automatic payouts to your UPI ID when jobs are completed
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setPayoutsEnabled(!payoutsEnabled)}
+                  className={`
+                    relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2
+                    ${payoutsEnabled ? 'bg-primary' : 'bg-slate-300 dark:bg-slate-600'}
+                  `}
+                >
+                  <span
+                    className={`
+                      inline-block h-4 w-4 transform rounded-full bg-white transition-transform
+                      ${payoutsEnabled ? 'translate-x-6' : 'translate-x-1'}
+                    `}
+                  />
+                </button>
+              </label>
             </div>
 
             {error && (
@@ -229,7 +301,9 @@ export default function PayoutSetupPage() {
                 )}
               </Button>
             </div>
-          </form>
+              </form>
+            </>
+          )}
         </Card>
 
         <div className="mt-6 text-center">

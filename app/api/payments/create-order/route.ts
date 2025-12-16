@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import Razorpay from "razorpay";
 import { getCurrentUser } from "@/server/auth/role";
 import { prisma } from "@/server/db/client";
-import { isRouteMockEnabled, isRouteLiveEnabled } from "@/lib/paymentsConfig";
 
 const KEY_ID = process.env.RAZORPAY_KEY_ID;
 const KEY_SECRET = process.env.RAZORPAY_KEY_SECRET;
@@ -16,30 +15,35 @@ export async function POST(req: NextRequest) {
     }
     const userId = user.id;
 
-    const body = await req.json().catch(() => null);
-    const { amount, choreId, notes: clientNotes } = body ?? {};
-
-    // Validate amount
-    if (typeof amount !== "number" || amount <= 0) {
-      console.error("Invalid amount in create-order:", body);
+    const body = await req.json().catch(() => {
+      console.error("Failed to parse request body as JSON");
+      return null;
+    });
+    
+    if (!body) {
       return NextResponse.json(
-        { error: "Invalid amount passed to create-order" },
+        { error: "Invalid request body. Expected JSON." },
         { status: 400 }
       );
     }
+    
+    const { amount: clientAmount, choreId, notes: clientNotes } = body;
 
     // If choreId is provided, validate that the chore exists and belongs to the user
     let assignedWorker = null
     let workerPayoutPaise = null
     let platformFeePaise = null
+    let amountInRupees: number | null = null
+    let chore = null
 
     if (choreId) {
-      const chore = await prisma.chore.findUnique({
+      chore = await prisma.chore.findUnique({
         where: { id: choreId },
         select: {
           id: true,
           createdById: true,
           budget: true,
+          agreedPrice: true,
           paymentStatus: true,
           status: true,
           assignedWorkerId: true,
@@ -60,6 +64,36 @@ export async function POST(req: NextRequest) {
         );
       }
 
+      // Derive amount from chore's budget or agreedPrice
+      amountInRupees = chore.budget ?? chore.agreedPrice ?? null;
+      
+      if (!amountInRupees || amountInRupees <= 0) {
+        return NextResponse.json(
+          { error: "Chore has no valid payment amount (budget or agreedPrice)" },
+          { status: 400 }
+        );
+      }
+    } else {
+      // If no choreId, require amount from client
+      if (typeof clientAmount !== "number" || clientAmount <= 0) {
+        return NextResponse.json(
+          { error: "Either choreId or amount is required" },
+          { status: 400 }
+        );
+      }
+      amountInRupees = clientAmount;
+    }
+
+    // Validate amount
+    if (!amountInRupees || amountInRupees <= 0) {
+      return NextResponse.json(
+        { error: "Invalid payment amount" },
+        { status: 400 }
+      );
+    }
+
+    if (chore) {
+
       // Enforce escrow model: chore must be ASSIGNED with a worker
       if (chore.status !== "ASSIGNED") {
         return NextResponse.json(
@@ -75,9 +109,14 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      if (chore.paymentStatus !== "UNPAID") {
+      // Allow payment if UNPAID or PENDING (both are payable states)
+      // Block only when FUNDED, REFUNDED, or other terminal states
+      const payableStatuses = ["UNPAID", "PENDING", null, undefined];
+      const isPayableStatus = payableStatuses.includes(chore.paymentStatus as any);
+      
+      if (!isPayableStatus) {
         return NextResponse.json(
-          { error: `Cannot create payment. Payment status must be UNPAID, but it is ${chore.paymentStatus}` },
+          { error: `Cannot create payment. Payment status is ${chore.paymentStatus}. Only UNPAID or PENDING chores can be paid.` },
           { status: 400 }
         );
       }
@@ -98,18 +137,17 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      if (!assignedWorker.razorpayAccountId) {
-        return NextResponse.json(
-          { error: "Assigned worker has not completed payout onboarding" },
-          { status: 400 }
-        );
-      }
+      // Note: We no longer block payment if worker doesn't have Route account
+      // Payment will proceed without transfers if razorpayAccountId is invalid/missing
 
-      // Update chore paymentStatus to PENDING (status remains ASSIGNED)
-      await prisma.chore.update({
-        where: { id: choreId },
-        data: { paymentStatus: "PENDING" },
-      });
+      // Update chore paymentStatus to PENDING if it's currently UNPAID (status remains ASSIGNED)
+      // This allows retrying payment if a previous order was created but not completed
+      if (chore.paymentStatus === "UNPAID" || !chore.paymentStatus) {
+        await prisma.chore.update({
+          where: { id: choreId },
+          data: { paymentStatus: "PENDING" },
+        });
+      }
     }
 
     if (!KEY_ID || !KEY_SECRET) {
@@ -137,147 +175,75 @@ export async function POST(req: NextRequest) {
     });
 
     // Razorpay expects paise
-    const amountInPaise = Math.round(amount * 100);
+    const amountInPaise = Math.round(amountInRupees * 100);
 
-    // Calculate split payment if worker is assigned
-    // Always compute fees (needed for both mock and live modes)
-    if (assignedWorker && assignedWorker.razorpayAccountId) {
+    // Build base order options
+    const orderOptions: any = {
+      amount: amountInPaise,
+      currency: "INR",
+      notes: {
+        ...notes,
+        workerId: assignedWorker?.id ?? null,
+      },
+    };
+
+    // Validate if worker has a valid Razorpay Route account ID
+    // Account ID must start with "acc_" and be exactly 18 characters
+    const hasValidRouteAccount = 
+      assignedWorker &&
+      assignedWorker.razorpayAccountId &&
+      assignedWorker.razorpayAccountId.startsWith("acc_") &&
+      assignedWorker.razorpayAccountId.length === 18;
+
+    if (hasValidRouteAccount && assignedWorker) {
       // 10% platform fee, 90% to worker
       platformFeePaise = Math.round(amountInPaise * 0.10);
       workerPayoutPaise = amountInPaise - platformFeePaise;
 
-      // MOCK MODE: Don't send transfers to Razorpay, generate fake transferId
-      if (isRouteMockEnabled()) {
-        // Create order WITHOUT transfers (works with regular Razorpay test account)
-        const order = await razorpay.orders.create({
-          amount: amountInPaise,
+      // Include transfers in order payload for split payments
+      orderOptions.transfers = [
+        {
+          account: assignedWorker.razorpayAccountId,
+          amount: workerPayoutPaise,
           currency: "INR",
-          notes,
-        });
-
-        console.log("Razorpay order created (mock mode, no transfers):", {
-          id: order.id,
-          amount: order.amount,
-          currency: order.currency,
-        });
-
-        // Generate fake transfer ID
-        const fakeTransferId = `tr_mock_${order.id}`;
-
-        // Create RazorpayPayment record with fake transferId
-        const paymentRecord = await prisma.razorpayPayment.create({
-          data: {
-            userId,
-            choreId: choreId ?? null,
-            amount:
-              typeof order.amount === "string"
-                ? parseInt(order.amount, 10)
-                : order.amount, // paise from Razorpay
-            currency: order.currency,
-            status: "PENDING",
-            razorpayOrderId: order.id,
-            platformFee: platformFeePaise,
-            workerPayout: workerPayoutPaise,
-            transferId: fakeTransferId,
-            notes,
-          },
-        });
-
-        // Return order details to client
-        return NextResponse.json(
-          {
-            orderId: order.id,
-            amount: order.amount, // paise
-            currency: order.currency,
-            paymentId: paymentRecord.id, // internal DB id
-          },
-          { status: 200 }
-        );
-      }
-
-      // LIVE MODE: Include transfers in order payload
-      if (isRouteLiveEnabled()) {
-        const transfers = [
-          {
-            account: assignedWorker.razorpayAccountId,
-            amount: workerPayoutPaise,
-            currency: "INR",
-            on_hold: true, // Hold until client approves
-          },
-        ];
-
-        const order = await razorpay.orders.create({
-          amount: amountInPaise,
-          currency: "INR",
-          notes,
-          transfers,
-        });
-
-        console.log("Razorpay order created (live mode, with transfers):", {
-          id: order.id,
-          amount: order.amount,
-          currency: order.currency,
-        });
-
-        // Extract transfer_id from order response (handles both array and collection shape)
-let transferId: string | null = null;
-
-if (order.transfers) {
-  const transfersArray = Array.isArray(order.transfers)
-    ? order.transfers
-    : order.transfers.items;
-
-  if (transfersArray && transfersArray.length > 0) {
-    transferId = transfersArray[0]?.id ?? null;
-  }
-}
-
-        // Create RazorpayPayment record
-        const paymentRecord = await prisma.razorpayPayment.create({
-          data: {
-            userId,
-            choreId: choreId ?? null,
-            amount:
-              typeof order.amount === "string"
-                ? parseInt(order.amount, 10)
-                : order.amount, // paise from Razorpay
-            currency: order.currency,
-            status: "PENDING",
-            razorpayOrderId: order.id,
-            platformFee: platformFeePaise,
-            workerPayout: workerPayoutPaise,
-            transferId: transferId,
-            notes,
-          },
-        });
-
-        // Return order details to client
-        return NextResponse.json(
-          {
-            orderId: order.id,
-            amount: order.amount, // paise
-            currency: order.currency,
-            paymentId: paymentRecord.id, // internal DB id
-          },
-          { status: 200 }
-        );
-      }
+          on_hold: true, // Hold until client approves
+        },
+      ];
+    } else if (assignedWorker) {
+      // Worker assigned but no valid Route account - log warning but allow payment
+      console.warn(
+        "Worker has no valid Razorpay sub-account; creating order without transfers",
+        {
+          workerId: assignedWorker.id,
+          razorpayAccountId: assignedWorker.razorpayAccountId ?? null,
+        }
+      );
     }
 
-    // No worker assigned - regular order creation (no transfers)
-    const order = await razorpay.orders.create({
-      amount: amountInPaise,
-      currency: "INR",
-      notes,
-    });
+    // Create Razorpay order (with or without transfers)
+    const order = await razorpay.orders.create(orderOptions);
 
     console.log("Razorpay order created:", {
       id: order.id,
       amount: order.amount,
       currency: order.currency,
+      hasTransfers: !!orderOptions.transfers,
     });
 
-    // Create RazorpayPayment record without transferId
+    // Extract transfer_id from order response (handles both array and collection shape)
+    let transferId: string | null = null;
+
+    if (order.transfers) {
+      const transfersArray = Array.isArray(order.transfers)
+        ? order.transfers
+        : order.transfers.items;
+
+      if (transfersArray && transfersArray.length > 0) {
+        transferId = transfersArray[0]?.id ?? null;
+      }
+    }
+
+    // Create RazorpayPayment record
     const paymentRecord = await prisma.razorpayPayment.create({
       data: {
         userId,
@@ -291,7 +257,7 @@ if (order.transfers) {
         razorpayOrderId: order.id,
         platformFee: platformFeePaise ?? null,
         workerPayout: workerPayoutPaise ?? null,
-        transferId: null,
+        transferId: transferId,
         notes,
       },
     });
