@@ -81,6 +81,37 @@ export async function POST(request: NextRequest) {
     // Generate new reference ID for retry
     const referenceId = `chore_${payout.choreId}_${payout.id}_retry_${Date.now()}`
 
+    // SIMULATION MODE: If enabled, skip Razorpay call and mark as SUCCESS immediately
+    const SIMULATED_PAYOUTS = process.env.RAZORPAY_SIMULATED_PAYOUTS === 'true'
+
+    if (SIMULATED_PAYOUTS) {
+      // Simulate successful retry without calling Razorpay
+      const simulatedPayout = await prisma.workerPayout.update({
+        where: { id: payoutId },
+        data: {
+          razorpayPayoutId: `SIMULATED_PAYOUT_RETRY_${payoutId}`,
+          status: 'SUCCESS',
+          errorMessage: null,
+          updatedAt: new Date(),
+        },
+      })
+
+      console.log('[SIMULATED_PAYOUT] Retried simulated payout', {
+        payoutId,
+        choreId: payout.choreId,
+        workerId: payout.workerId,
+        amount: payout.amount,
+      })
+
+      return NextResponse.json(
+        {
+          success: true,
+          payout: simulatedPayout,
+        },
+        { status: 200 }
+      )
+    }
+
     try {
       // Call Razorpay to create payout
       const razorpayResponse = await createRazorpayPayout(

@@ -136,6 +136,31 @@ export async function createWorkerPayout(choreId: string): Promise<{
     // Generate unique reference ID for idempotency
     const referenceId = `chore_${choreId}_${payoutRecord.id}_${Date.now()}`
 
+    // SIMULATION MODE: If enabled, skip Razorpay call and mark as SUCCESS immediately
+    // This is for dev/testing only and should be disabled in production
+    const SIMULATED_PAYOUTS = process.env.RAZORPAY_SIMULATED_PAYOUTS === 'true'
+
+    if (SIMULATED_PAYOUTS) {
+      // Create a simulated successful payout without calling Razorpay
+      const simulatedPayout = await prisma.workerPayout.update({
+        where: { id: payoutRecord.id },
+        data: {
+          razorpayPayoutId: `SIMULATED_PAYOUT_${payoutRecord.id}`,
+          status: 'SUCCESS',
+          errorMessage: null,
+        },
+      })
+
+      console.log('[SIMULATED_PAYOUT] Created simulated payout', {
+        choreId,
+        workerId: chore.assignedWorkerId,
+        amountInPaise,
+        payoutId: payoutRecord.id,
+      })
+
+      return { success: true, payout: simulatedPayout }
+    }
+
     try {
       // Call Razorpay to create payout
       const razorpayResponse = await createRazorpayPayout(

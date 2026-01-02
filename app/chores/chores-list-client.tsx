@@ -9,6 +9,7 @@ import Button from '@/components/ui/button'
 import Badge from '@/components/ui/Badge'
 import Card from '@/components/ui/Card'
 import { formatDate } from '@/lib/utils'
+import { formatCurrencyFromRupees } from '@/lib/formatCurrency'
 
 interface ChoresListClientProps {
   chores: any[]
@@ -556,7 +557,7 @@ export default function ChoresListClient({
                     {chore.budget && (
                       <div className="flex items-center text-sm text-slate-500 dark:text-slate-400">
                         <span className="font-medium">Budget:</span>
-                        <span className="ml-2">${chore.budget}</span>
+                        <span className="ml-2">{formatCurrencyFromRupees(chore.budget)}</span>
                       </div>
                     )}
                     {chore.type === 'OFFLINE' && chore.locationAddress && (

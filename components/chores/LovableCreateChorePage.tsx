@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { getCategoryIcon } from './categories';
 import { cn } from '@/lib/utils';
+import { formatCurrency } from '@/lib/formatCurrency';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
@@ -748,8 +749,8 @@ export function ChorePreviewCard({
           
           {budgetNum > 0 && (
             <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-highlight/10 text-highlight-foreground dark:text-highlight">
-              <DollarSign className="w-3 h-3" />
-              ${budgetNum}
+              {/* <DollarSign className="w-3 h-3" /> */}
+              {formatCurrency(budgetNum)}
             </span>
           )}
         </div>

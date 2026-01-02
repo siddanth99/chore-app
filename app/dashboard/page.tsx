@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation'
 import { getCurrentUser } from '@/server/auth/role'
+import { prisma } from '@/server/db/client'
 import {
   getWorkerDashboardData,
   getCustomerDashboardData,
@@ -20,11 +21,28 @@ export default async function DashboardPage() {
     redirect('/signin')
   }
 
+  // Fetch full user data including payout account fields for banner check
+  const fullUser = await prisma.user.findUnique({
+    where: { id: user.id },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      role: true,
+      upiId: true,
+      razorpayAccountId: true,
+    },
+  })
+
+  if (!fullUser) {
+    redirect('/signin')
+  }
+
   let dashboardData
-  if (user.role === 'WORKER') {
-    dashboardData = await getWorkerDashboardData(user.id)
-  } else if (user.role === 'CUSTOMER') {
-    dashboardData = await getCustomerDashboardData(user.id)
+  if (fullUser.role === 'WORKER') {
+    dashboardData = await getWorkerDashboardData(fullUser.id)
+  } else if (fullUser.role === 'CUSTOMER') {
+    dashboardData = await getCustomerDashboardData(fullUser.id)
   } else {
     // Admin or other roles - show basic dashboard
     return (
@@ -58,8 +76,8 @@ export default async function DashboardPage() {
   if (USE_V2_DASHBOARD) {
     return (
       <DashboardClientV2
-        user={user}
-        role={user.role}
+        user={fullUser}
+        role={fullUser.role}
         data={dashboardData}
       />
     )
@@ -67,8 +85,8 @@ export default async function DashboardPage() {
 
   return (
     <DashboardClient
-      user={user}
-      role={user.role}
+      user={fullUser}
+      role={fullUser.role}
       data={dashboardData}
     />
   )
