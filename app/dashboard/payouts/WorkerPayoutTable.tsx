@@ -4,7 +4,7 @@ import { useState, useMemo } from 'react'
 import Link from 'next/link'
 import { PaymentStatus, type RazorpayPayment, type Chore } from '@prisma/client'
 import Card from '@/components/ui/Card'
-import { formatCurrency } from '@/lib/formatCurrency'
+import { formatCurrency, formatCurrencyFromPaise } from '@/lib/formatCurrency'
 
 // Extended type to include payout fields that may not be in Prisma types yet
 type WorkerPayoutPayment = RazorpayPayment & {
@@ -287,10 +287,16 @@ export default function WorkerPayoutTable({ payments, summary }: Props) {
                         )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-900 dark:text-slate-100">
-                        {payment.workerPayout != null ? formatCurrency(payment.workerPayout) : '—'}
+                        {payment.workerPayout != null ? (
+                          // CRITICAL: Convert paise to rupees before formatting
+                          formatCurrency(payment.workerPayout / 100)
+                        ) : '—'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600 dark:text-slate-400">
-                        {payment.platformFee != null ? formatCurrency(payment.platformFee) : '—'}
+                        {payment.platformFee != null ? (
+                          // CRITICAL: Convert paise to rupees before formatting
+                          formatCurrency(payment.platformFee / 100)
+                        ) : '—'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm">
                         {getStatusBadge(payment.status)}

@@ -19,10 +19,10 @@ import { Textarea } from '@/components/ui/textarea'
 import { Input } from '@/components/ui/input'
 import { formatDate } from '@/lib/utils'
 import { cn } from '@/lib/utils'
+import { formatCurrencyFromRupees } from '@/lib/formatCurrency'
 import { getCategoryIcon } from '@/components/chores/categories'
 import CustomerApplicationsPanel from '@/components/applications/CustomerApplicationsPanel'
 import { useToast } from '@/components/ui/toast'
-import ThemeToggle from '@/components/theme/ThemeToggle'
 
 interface ChoreDetailClientProps {
   chore: any
@@ -690,7 +690,6 @@ export default function ChoreDetailClient({
           </Button>
           
           <div className="flex items-center gap-2">
-            <ThemeToggle />
             <Button variant="ghost" size="sm">
               <Heart className="w-5 h-5" />
             </Button>
@@ -1275,7 +1274,7 @@ export default function ChoreDetailClient({
                   </label>
                     <p className="text-xs text-muted-foreground mb-3">
                     {chore.budget 
-                        ? `The customer's budget is ₹${chore.budget.toLocaleString('en-IN')}. You can match it or propose a different amount.`
+                        ? `The customer's budget is ${formatCurrencyFromRupees(chore.budget)}. You can match it or propose a different amount.`
                       : 'No budget specified. Propose your rate for this job.'}
                   </p>
                   <div className="relative">
@@ -1765,31 +1764,6 @@ export default function ChoreDetailClient({
               ) : null;
             })()}
 
-        {/* Chat unavailable message - show when user is owner/assigned worker but chat not available yet */}
-            {(() => {
-              const hasWorker = !!chore.assignedWorkerId;
-              const isTerminalStatus = [
-                'CLOSED',
-                'CANCELED',
-                'CANCELLED',
-              ].includes(choreStatus);
-              const isChatEnabled = hasWorker && !isTerminalStatus;
-
-              return currentUser &&
-          (isOwner || isAssignedWorker) &&
-                !isChatEnabled ? (
-                <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="rounded-2xl border border-border/50 bg-card/80 backdrop-blur-xl shadow-lg p-6"
-                >
-                  <h2 className="mb-2 text-xl font-semibold text-foreground">Chat</h2>
-                  <p className="text-sm text-muted-foreground">
-                Chat becomes available once the chore has been assigned to a worker.
-              </p>
-                </motion.div>
-              ) : null;
-            })()}
       </div>
         </div>
       </main>

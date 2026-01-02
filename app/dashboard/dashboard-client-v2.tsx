@@ -54,6 +54,7 @@ import { AssignedCard } from '@/components/dashboard/AssignedCard'
 import { QuickActions } from '@/components/dashboard/QuickActions'
 import { NotificationsSummary } from '@/components/dashboard/NotificationsSummary'
 import { LovableDashboardChoreCard } from '@/components/dashboard/LovableDashboardChoreCard'
+import { formatCurrencyFromRupees } from '@/lib/formatCurrency'
 
 // Shared UI components
 import LogoutButton from './logout-button'
@@ -154,7 +155,7 @@ export default function DashboardClientV2({ user, role, data }: DashboardClientV
   // TODO: Fetch notifications from API or pass via props
   // For now, using placeholder data
   const mockNotifications = [
-    { id: '1', title: 'System Update', message: 'New features available', time: 'Just now', type: 'system' as const },
+    { id: '1', title: 'View Payments', message: 'New features available', time: 'Just now', type: 'system' as const },
   ]
 
   const handleRoleToggle = async (newRole: UserRole) => {
@@ -218,6 +219,19 @@ export default function DashboardClientV2({ user, role, data }: DashboardClientV
                 </p>
               </div>
               <div className="flex items-center gap-3">
+                {/* Payment Navigation Buttons */}
+              <div className="flex items-center gap-2">
+                  <Link href="/dashboard/earnings-lovable">
+                    <Button variant="outline" size="sm">
+                      Earnings
+                    </Button>
+                  </Link>
+                  <Link href="/dashboard/payout-settings-lovable">
+                    <Button variant="secondary" size="sm">
+                      Payout Settings
+                    </Button>
+                  </Link>
+                </div>
                 {/* Role Toggle */}
                 <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-border bg-card">
                   <button
@@ -241,7 +255,7 @@ export default function DashboardClientV2({ user, role, data }: DashboardClientV
                         : 'text-muted-foreground hover:text-foreground'
                     } ${isUpdatingRole ? 'opacity-50 cursor-not-allowed' : ''}`}
                   >
-                    Worker
+                  Worker
                   </button>
                 </div>
                 <LogoutButton />
@@ -249,7 +263,8 @@ export default function DashboardClientV2({ user, role, data }: DashboardClientV
             </div>
 
             {/* Payout Onboarding Warning */}
-            {!user.razorpayAccountId && (
+            {/* CRITICAL: Show banner ONLY if user has NO payout account configured */}
+            {!user.upiId && !user.razorpayAccountId && (
               <div className="mb-6 p-4 rounded-xl bg-yellow-50 dark:bg-yellow-900/20 border-2 border-yellow-200 dark:border-yellow-800">
                 <div className="flex items-start gap-3">
                   <svg
@@ -300,7 +315,7 @@ export default function DashboardClientV2({ user, role, data }: DashboardClientV
               />
               <StatCard
                 title="Total Earnings"
-                value={`₹${stats.totalEarnings.toLocaleString()}`}
+                value={formatCurrencyFromRupees(stats.totalEarnings)}
                 icon={Icons.dollar}
                 variant="accent"
               />
@@ -350,7 +365,7 @@ export default function DashboardClientV2({ user, role, data }: DashboardClientV
                         assignedBy={chore.createdBy?.name || 'Customer'}
                         progress={chore.status === 'IN_PROGRESS' ? 50 : 25}
                         dueDate={chore.dueAt ? formatRelativeTime(chore.dueAt) : 'No deadline'}
-                        budget={`₹${chore.budget || 0}`}
+                        budget={formatCurrencyFromRupees(chore.budget || 0)}
                         isWorkerView={true}
                         onChat={() => router.push(`/chores/${chore.id}?from=dashboard`)}
                         onMarkComplete={() => router.push(`/chores/${chore.id}?from=dashboard`)}
@@ -382,7 +397,7 @@ export default function DashboardClientV2({ user, role, data }: DashboardClientV
                         category={chore.category || 'General'}
                         status="completed"
                         applicationsCount={chore._count?.applications || 0}
-                        budget={`₹${chore.budget || 0}`}
+                        budget={formatCurrencyFromRupees(chore.budget || 0)}
                         createdAt={formatRelativeTime(chore.createdAt)}
                         onView={() => router.push(`/chores/${chore.id}?from=dashboard`)}
                       />
@@ -467,6 +482,12 @@ export default function DashboardClientV2({ user, role, data }: DashboardClientV
               </p>
             </div>
             <div className="flex items-center gap-3">
+              {/* Payment Navigation Button */}
+              <Link href="/dashboard/payments-lovable">
+                <Button variant="outline" size="sm">
+                  View Payments
+                </Button>
+              </Link>
               {/* Role Toggle */}
               <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-border bg-card">
                 <button
@@ -478,7 +499,7 @@ export default function DashboardClientV2({ user, role, data }: DashboardClientV
                       : 'text-muted-foreground hover:text-foreground'
                   } ${isUpdatingRole ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
-                  Customer
+                Customer
                 </button>
                 <div className="h-4 w-px bg-border" />
                 <button
@@ -566,7 +587,7 @@ export default function DashboardClientV2({ user, role, data }: DashboardClientV
                       category={chore.category || 'General'}
                       status="open"
                       applicationsCount={chore._count?.applications || 0}
-                      budget={`₹${chore.budget || 0}`}
+                      budget={formatCurrencyFromRupees(chore.budget || 0)}
                       createdAt={formatRelativeTime(chore.createdAt)}
                       onView={() => router.push(`/chores/${chore.id}?from=dashboard`)}
                       onEdit={() => router.push(`/chores/${chore.id}/edit`)}
@@ -601,7 +622,7 @@ export default function DashboardClientV2({ user, role, data }: DashboardClientV
                       assignedTo={chore.assignedWorker?.name || 'Pending'}
                       progress={chore.status === 'IN_PROGRESS' ? 50 : 25}
                       dueDate={chore.dueAt ? formatRelativeTime(chore.dueAt) : 'No deadline'}
-                      budget={`₹${chore.budget || 0}`}
+                      budget={formatCurrencyFromRupees(chore.budget || 0)}
                       isWorkerView={false}
                       onChat={() => router.push(`/chores/${chore.id}?from=dashboard`)}
                       onManage={() => router.push(`/chores/${chore.id}?from=dashboard`)}
@@ -630,7 +651,7 @@ export default function DashboardClientV2({ user, role, data }: DashboardClientV
                       category={chore.category || 'General'}
                       status="draft"
                       applicationsCount={0}
-                      budget={`₹${chore.budget || 0}`}
+                      budget={formatCurrencyFromRupees(chore.budget || 0)}
                       createdAt={formatRelativeTime(chore.createdAt)}
                       onView={() => router.push(`/chores/${chore.id}?from=dashboard`)}
                       onEdit={() => router.push(`/chores/${chore.id}/edit`)}
@@ -691,7 +712,7 @@ export default function DashboardClientV2({ user, role, data }: DashboardClientV
                   category={chore.category || 'General'}
                   status="completed"
                   applicationsCount={chore._count?.applications || 0}
-                  budget={`$${chore.budget || 0}`}
+                  budget={formatCurrencyFromRupees(chore.budget || 0)}
                   createdAt={formatRelativeTime(chore.updatedAt || chore.createdAt)}
                   onView={() => router.push(`/chores/${chore.id}?from=dashboard`)}
                 />
